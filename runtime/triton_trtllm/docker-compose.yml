@@ -17,4 +17,4 @@ services:
               device_ids: ["0"]
               capabilities: [gpu]
     command: >
-      /bin/bash -c "rm -rf Spark-TTS && git clone https://github.com/SparkAudio/Spark-TTS.git && cd Spark-TTS/runtime/triton_trtllm && bash run.sh 0 3"
+      /bin/bash -c "rm -rf Spark-TTS && git clone https://github.com/VSlobolinskyi/triton-spark-server.git && cd triton-spark-server/runtime/triton_trtllm && bash run.sh 0 3"
