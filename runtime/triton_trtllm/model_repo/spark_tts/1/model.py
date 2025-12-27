@@ -324,6 +324,8 @@ class TritonPythonModel:
             # Extract text inputs
             reference_text = pb_utils.get_input_tensor_by_name(request, "reference_text").as_numpy()
             reference_text = reference_text[0][0].decode('utf-8')
+            if not reference_text.strip():
+                reference_text = None
             
             target_text = pb_utils.get_input_tensor_by_name(request, "target_text").as_numpy()
             target_text = target_text[0][0].decode('utf-8')

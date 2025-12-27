@@ -175,3 +175,7 @@ cython_debug/
 
 # Custom exclusions
 struct.txt
+
+# Generated repo context files
+repo-context.json
+repo-context-essential.json
