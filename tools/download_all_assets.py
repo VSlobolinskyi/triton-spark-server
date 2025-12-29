@@ -41,13 +41,6 @@ RVC_REQUIRED_MODELS = {
     "rmvpe": ["rmvpe.pt"],
 }
 
-# Optional RVC pretrained models (for training, not needed for inference)
-RVC_PRETRAINED_V1 = [
-    "D32k.pth", "D40k.pth", "D48k.pth",
-    "G32k.pth", "G40k.pth", "G48k.pth",
-    "f0D32k.pth", "f0D40k.pth", "f0D48k.pth",
-    "f0G32k.pth", "f0G40k.pth", "f0G48k.pth",
-]
 
 
 # =============================================================================
@@ -141,8 +134,8 @@ def download_spark_model(model_dir: Path) -> bool:
 # RVC Assets Download
 # =============================================================================
 
-def download_rvc_assets(assets_dir: Path, include_pretrained: bool = False) -> bool:
-    """Download RVC required assets."""
+def download_rvc_assets(assets_dir: Path) -> bool:
+    """Download RVC required assets (HuBERT, RMVPE)."""
     print("\n" + "=" * 60)
     print("Downloading RVC Assets")
     print("=" * 60)
@@ -156,22 +149,6 @@ def download_rvc_assets(assets_dir: Path, include_pretrained: bool = False) -> b
             url = f"{RVC_DOWNLOAD_LINK}{model}"
             if not download_file(url, dest_dir / model, f"{subdir}/{model}"):
                 success = False
-
-    # Download pretrained models (optional)
-    if include_pretrained:
-        print("\n  [INFO] Downloading pretrained models (optional)...")
-
-        # Pretrained v1
-        dest_dir = assets_dir / "pretrained"
-        for model in RVC_PRETRAINED_V1:
-            url = f"{RVC_DOWNLOAD_LINK}pretrained/{model}"
-            download_file(url, dest_dir / model, f"pretrained/{model}")
-
-        # Pretrained v2
-        dest_dir = assets_dir / "pretrained_v2"
-        for model in RVC_PRETRAINED_V1:
-            url = f"{RVC_DOWNLOAD_LINK}pretrained_v2/{model}"
-            download_file(url, dest_dir / model, f"pretrained_v2/{model}")
 
     if success:
         print("  [DONE] RVC assets downloaded successfully")
@@ -261,10 +238,6 @@ def main():
         help="Only download RVC assets"
     )
     parser.add_argument(
-        "--skip-pretrained", action="store_true",
-        help="Skip RVC pretrained models (training only)"
-    )
-    parser.add_argument(
         "--rvc-model", type=str,
         help="URL to RVC voice model zip to download"
     )
@@ -306,7 +279,7 @@ def main():
 
     # Download RVC assets
     if not args.spark_only:
-        if not download_rvc_assets(assets_dir, include_pretrained=not args.skip_pretrained):
+        if not download_rvc_assets(assets_dir):
             success = False
 
     # Download specific RVC voice model if provided
