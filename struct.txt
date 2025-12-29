@@ -1,0 +1,155 @@
+├── .gitignore
+├── .vscode
+│   └── settings.json
+├── assets
+│   ├── hubert
+│   ├── rmvpe
+│   └── weights
+├── colab
+│   └── triton_spark_rvc.ipynb
+├── generate-structure.js
+├── INTEGRATION_STATUS.md
+├── LICENSE
+├── logs
+│   └── mute
+│       ├── 0_gt_wavs
+│       │   ├── mute32k.wav
+│       │   ├── mute40k.wav
+│       │   └── mute48k.wav
+│       ├── 1_16k_wavs
+│       │   └── mute.wav
+│       ├── 2a_f0
+│       │   └── mute.wav.npy
+│       ├── 2b-f0nsf
+│       │   └── mute.wav.npy
+│       ├── 3_feature256
+│       │   └── mute.npy
+│       └── 3_feature768
+│           └── mute.npy
+├── PROPOSED_STRUCTURE.md
+├── pyproject.toml
+├── README.md
+├── requirements.txt
+├── runtime
+│   └── triton_trtllm
+│       ├── client_grpc.py
+│       ├── docker-compose.yml
+│       ├── Dockerfile.server
+│       ├── model_repo
+│       │   ├── audio_tokenizer
+│       │   │   ├── 1
+│       │   │   │   └── model.py
+│       │   │   └── config.pbtxt
+│       │   ├── spark_tts
+│       │   │   ├── 1
+│       │   │   │   └── model.py
+│       │   │   └── config.pbtxt
+│       │   ├── tensorrt_llm
+│       │   │   ├── 1
+│       │   │   │   └── .gitkeep
+│       │   │   └── config.pbtxt
+│       │   └── vocoder
+│       │       ├── 1
+│       │       │   └── model.py
+│       │       └── config.pbtxt
+│       ├── README.md
+│       ├── run.sh
+│       ├── scripts
+│       │   ├── convert_checkpoint.py
+│       │   └── fill_template.py
+│       └── TritonSparkTTS.py
+├── rvc
+│   ├── configs
+│   │   ├── v1
+│   │   │   ├── 32k.json
+│   │   │   ├── 40k.json
+│   │   │   └── 48k.json
+│   │   └── v2
+│   │       ├── 32k.json
+│   │       └── 48k.json
+│   ├── download_assets.py
+│   ├── download_model.py
+│   ├── infer
+│   │   ├── lib
+│   │   │   ├── audio.py
+│   │   │   ├── infer_pack
+│   │   │   │   ├── attentions.py
+│   │   │   │   ├── commons.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── modules
+│   │   │   │   │   └── F0Predictor
+│   │   │   │   │       ├── DioF0Predictor.py
+│   │   │   │   │       ├── F0Predictor.py
+│   │   │   │   │       ├── HarvestF0Predictor.py
+│   │   │   │   │       ├── PMF0Predictor.py
+│   │   │   │   │       └── __init__.py
+│   │   │   │   ├── modules.py
+│   │   │   │   ├── transforms.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── jit
+│   │   │   │   ├── get_hubert.py
+│   │   │   │   ├── get_rmvpe.py
+│   │   │   │   ├── get_synthesizer.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── rmvpe.py
+│   │   │   ├── slicer2.py
+│   │   │   └── __init__.py
+│   │   ├── modules
+│   │   │   ├── vc
+│   │   │   │   ├── pipeline.py
+│   │   │   │   ├── utils.py
+│   │   │   │   └── __init__.py
+│   │   │   └── __init__.py
+│   │   └── __init__.py
+│   ├── processing
+│   │   ├── buffer_queue.py
+│   │   ├── utils.py
+│   │   ├── workers.py
+│   │   ├── worker_manager.py
+│   │   └── __init__.py
+│   ├── rvc_config.py
+│   ├── rvc_init.py
+│   ├── rvc_modules.py
+│   ├── triton_client.py
+│   └── __init__.py
+├── rvc_collab_script.txt
+├── sparktts
+│   ├── models
+│   │   ├── audio_tokenizer.py
+│   │   └── bicodec.py
+│   ├── modules
+│   │   ├── blocks
+│   │   │   ├── layers.py
+│   │   │   ├── samper.py
+│   │   │   └── vocos.py
+│   │   ├── encoder_decoder
+│   │   │   ├── feat_decoder.py
+│   │   │   ├── feat_encoder.py
+│   │   │   └── wave_generator.py
+│   │   ├── fsq
+│   │   │   ├── finite_scalar_quantization.py
+│   │   │   └── residual_fsq.py
+│   │   ├── speaker
+│   │   │   ├── ecapa_tdnn.py
+│   │   │   ├── perceiver_encoder.py
+│   │   │   ├── pooling_layers.py
+│   │   │   └── speaker_encoder.py
+│   │   └── vq
+│   │       └── factorized_vector_quantize.py
+│   └── utils
+│       ├── audio.py
+│       ├── file.py
+│       ├── parse_options.sh
+│       ├── token_parser.py
+│       └── __init__.py
+├── struct.txt
+├── TODO.txt
+├── tools
+│   ├── download_all_assets.py
+│   ├── init_rvc.py
+│   ├── run_rvc.py
+│   ├── run_tts.py
+│   ├── setup_environment.py
+│   ├── test_pipeline.py
+│   └── test_triton_connection.py
+└── triton_collab_scritps.txt
