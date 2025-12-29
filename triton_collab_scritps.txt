@@ -1,0 +1,160 @@
+# CELL 1
+# Initialize udocker as before
+def udocker_init():
+    import os
+    if not os.path.exists("/home/user"):
+        !pip install udocker > /dev/null
+        !udocker --allow-root install > /dev/null
+        !useradd -m user > /dev/null
+    print(f'Docker-in-Colab 1.1.0\n')
+    print(f'Usage:     udocker("--help")')
+    print(f'Examples:  https://github.com/indigo-dc/udocker?tab=readme-ov-file#examples')
+    def execute(command: str):
+        user_prompt = "\033[1;32muser@pc\033[0m"
+        print(f"{user_prompt}$ udocker {command}")
+        !su - user -c "udocker $command"
+    return execute
+udocker = udocker_init()
+
+# CELL 2
+
+# Clone your repository
+!git clone https://github.com/VSlobolinskyi/triton-spark-server.git
+%cd triton-spark-server
+
+# CELL 3
+
+!udocker --allow-root pull nvcr.io/nvidia/tritonserver:25.02-trtllm-python-py3
+!udocker --allow-root create --name=triton_server nvcr.io/nvidia/tritonserver:25.02-trtllm-python-py3
+!udocker --allow-root setup --nvidia triton_server
+
+# CELL 4
+
+# Install dependencies + download model in one go
+install_all_cmd = (
+    f"udocker --allow-root run "
+    f"--hostauth "
+    f"--hostenv "
+    f"{gpu_config['all_options']} "
+    f"--volume=$PWD:/workspace "
+    f"triton_server "
+    f"""/bin/bash -c '
+apt-get update && apt-get install -y cmake &&
+git clone https://github.com/pytorch/audio.git && cd audio && git checkout c670ad8 && USE_FFMPEG=0 PATH=/usr/local/cuda/bin:$PATH python3 setup.py develop &&
+pip install einx==0.3.0 omegaconf==2.3.0 soundfile==0.12.1 soxr==0.5.0.post1 gradio tritonclient librosa "huggingface-hub>=0.24.0,<1.0" &&
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id=\\\"SparkAudio/Spark-TTS-0.5B\\\", local_dir=\\\"/workspace/pretrained_models/Spark-TTS-0.5B\\\")"
+'"""
+)
+
+!{install_all_cmd}
+
+# CELL 5
+
+setup_cmd = (
+    f"udocker --allow-root run "
+    f"--hostauth --hostenv "
+    f"{gpu_config['all_options']} "
+    f"--env=PYTHONPATH=/workspace "
+    f"--volume=$PWD:/workspace "
+    f"triton_server "
+    f"/bin/bash -c 'cd /workspace/runtime/triton_trtllm && bash run.sh 1 2 offline'"
+)
+
+!{setup_cmd}
+
+# CELL 6
+
+import subprocess
+import time
+
+server_cmd = (
+    f"udocker --allow-root run "
+    f"--hostauth --hostenv "
+    f"{gpu_config['all_options']} "
+    f"--env=PYTHONPATH=/workspace "
+    f"--volume=$PWD:/workspace "
+    f"triton_server "
+    f"/bin/bash -c 'cd /workspace/runtime/triton_trtllm && tritonserver --model-repository=./model_repo_test'"
+)
+
+# Run with nohup to prevent signal issues
+process = subprocess.Popen(
+    f"nohup {server_cmd} > server_log.txt 2>&1 &",
+    shell=True
+)
+
+print("Server starting...")
+time.sleep(45)  # Wait for all models to load
+!tail -20 server_log.txt
+
+# CELL 7
+
+import os
+import soundfile as sf
+from scipy import signal
+
+# Create a references directory if it doesn't exist
+!mkdir -p references
+
+# Upload a reference audio file
+from google.colab import files
+print("Please upload a reference audio file (.wav format):")
+uploaded = files.upload()  # This will prompt you to upload a file
+
+# Get the filename of the uploaded audio
+reference_audio = list(uploaded.keys())[0]
+
+# Save the uploaded file to the references directory
+references_path = os.path.join("references", reference_audio)
+with open(references_path, "wb") as f:
+    f.write(uploaded[reference_audio])
+print(f"Saved {reference_audio} to {references_path}")
+
+# Create a 16kHz version of the audio
+audio, sr = sf.read(references_path)
+print(f"Original audio: {len(audio)/sr:.2f} seconds, {sr} Hz")
+
+# Resample to 16kHz
+target_sr = 16000
+num_samples = int(len(audio) * (target_sr / sr))
+resampled_audio = signal.resample(audio, num_samples)
+
+# Get the filename without extension
+base_name = os.path.splitext(reference_audio)[0]
+resampled_path = os.path.join("references", f"{base_name}_16k.wav")
+
+# Save the resampled audio
+sf.write(resampled_path, resampled_audio, target_sr)
+print(f"Resampled audio saved to {resampled_path}")
+
+reference_audio_16k = resampled_path
+print(f"Using {reference_audio_16k} for TTS inference")
+
+# CELL 8
+
+reference_text = ""  # Can be left empty for offline mode
+target_text = "Nice! The fix was exactly what we thought empty string was being treated as valid reference text, causing the model to include semantic tokens in the prompt and breaking LLM generation."
+
+client_cmd = (
+    f"udocker --allow-root run "
+    f"--hostauth --hostenv "
+    f"{gpu_config['all_options']} "
+    f"--env=PYTHONPATH=/workspace "
+    f"--volume=$PWD:/workspace "
+    f"triton_server "
+    f"/bin/bash -c 'cd /workspace/runtime/triton_trtllm && "
+    f"python3 client_grpc.py "
+    f"--server-addr 127.0.0.1 "
+    f"--server-port 8001 "
+    f"--model-name spark_tts "
+    f"--mode offline "
+    f"--reference-audio \"/workspace/{reference_audio_16k}\" "
+    f"--reference-text \"{reference_text}\" "
+    f"--target-text \"{target_text}\" "
+    f"--log-dir \"/workspace/output\"'"
+)
+
+!mkdir -p output
+!{client_cmd}
+
+

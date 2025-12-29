@@ -1,0 +1,52 @@
+# CELL 1
+!apt update
+!apt install -y software-properties-common
+!add-apt-repository ppa:deadsnakes/ppa -y
+!apt update
+!apt install -y python3.11 python3.11-dev python3.11-venv python3.11-distutils
+
+# Create symlink to make python3.11 the default python
+!update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+!update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+# Install pip for Python 3.11
+!curl https://bootstrap.pypa.io/get-pip.py | python3.11
+
+# Verify installation
+!python --version
+!python3 --version
+
+print("✅ Python 3.11 installed and set as default!")
+print("🔄 Please restart runtime (Runtime → Restart Runtime) then continue")
+
+# CELL 2
+
+!git clone https://github.com/VSlobolinskyi/spark-rvc-inference-module.git
+!curl -sSL https://install.python-poetry.org | python -
+
+# CELL 3
+
+import os
+os.environ["PATH"] += os.pathsep + os.path.expanduser("~/.local/bin")
+%cd spark-rvc-inference-module
+
+# CELL 4
+
+!python configure_gpu_deps.py nvidia
+!poetry lock
+!poetry install
+
+# CELL 5
+
+!MPLBACKEND=agg poetry run python tools/download_assets.py
+
+# CELL 6
+
+!MPLBACKEND=agg poetry run python tools/download_model.py https://huggingface.co/Juneuarie/SilverWolfEN/resolve/main/SilverWolf.zip
+
+# CELL 7
+
+!MPLBACKEND=agg poetry run python infer-web.py --colab --port 7897
+
+
+

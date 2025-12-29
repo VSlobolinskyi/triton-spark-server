@@ -1,0 +1,131 @@
+# TODO: Triton Spark TTS + RVC Integration
+
+## Architecture Decision: SPLIT
+- Triton Spark TTS runs INSIDE container (gRPC server on :8001)
+- RVC runs OUTSIDE container (host Python)
+- Both share same GPU - CUDA handles cross-process memory (tested on L4, works fine)
+- Communication: gRPC for TTS, temp WAV files between stages
+
+```
+[Host Python] ──gRPC──> [Triton Container] ──WAV──> [Host Python]
+    API                   Spark TTS                    RVC
+                         (port 8001)
+```
+
+## Decisions Confirmed
+- Package manager: pip (not uv, not poetry)
+- Gradio: NOT needed (Angular FE separate)
+- Python: 3.12 OK for RVC (constraint was artificially strict)
+- Transformers: Custom build in container - confirms split is correct
+- GPU RAM: Both models fit (tested on L4)
+- Worker/Queue: Use existing async implementation from spark-rvc-inference-module
+
+## Files Created
+- requirements.txt - RVC deps only (Triton has own in container)
+- tools/download_all_assets.py - Downloads Spark model + RVC assets
+- tools/setup_environment.py - Environment setup script
+- rvc-ready/ - RVC files ready to use as-is
+- rvc-in-progress/ - RVC files needing modification
+
+## Next Steps (In Order)
+
+### Step 1: Create simplified RVC config
+File: rvc-ready/rvc_config.py
+- Remove CLI argument parsing
+- Remove DirectML/AMD support
+- Remove singleton pattern
+- Add environment variable support
+- See: rvc-in-progress/TODO_config.txt for details
+
+### Step 2: Create RVC initialization module
+File: rvc-ready/rvc_init.py
+- Clean initialization without Gradio
+- Set environment variables (weight_root, index_root, rmvpe_root)
+- Functions: init_rvc(), get_vc(), load_model(), convert_audio()
+- See: rvc-in-progress/rvc_inference/TODO_initialization.txt
+
+### Step 3: Create Triton client wrapper
+File: rvc-ready/triton_client.py
+- Wrapper around gRPC client for Spark TTS
+- Match SparkTTS.inference() API signature
+- Handle WAV file I/O
+- Based on: runtime/triton_trtllm/client_grpc.py
+
+### Step 4: Adapt workers for Triton
+File: rvc-ready/processing/workers.py
+- Replace SparkTTS import with triton_client
+- Remove cuda_stream from TTS worker (Triton handles GPU)
+- Fix RVC import paths
+- See: rvc-in-progress/processing/TODO_workers.txt
+
+UserNote: We'd still need cuda streams. RVC doesn't use triton, only spark does, cuda streams are specifically used to be able to organize inference in an async way, so that Spark & Triton won't have to wait for RVCs to finish inference and separate RVC modules won't have to Wait for one antoher as well. Cuda streams are serving a role of container wrapper of sorts.
+
+### Step 5: Create test script
+File: tools/test_pipeline.py
+- Simple end-to-end test: text → Triton TTS → RVC → audio
+- Validate split architecture works
+- Test GPU memory sharing
+
+### Step 6: Create unified Colab notebook
+File: colab/triton_spark_rvc.ipynb
+- Combines both Triton and RVC setup
+- Single notebook workflow
+
+## Key Files Reference
+
+### From rvc-ready/ (use as-is)
+- infer/lib/audio.py - Audio loading (ffmpeg)
+- infer/lib/rmvpe.py - RMVPE F0 extraction
+- infer/lib/infer_pack/*.py - NN models
+- infer/modules/vc/pipeline.py - VC pipeline
+- infer/modules/vc/utils.py - HuBERT loading
+- configs/v1/*.json, configs/v2/*.json - Model configs
+- tools/download_assets.py, download_model.py
+
+### From rvc-in-progress/ (need modification)
+- config.py → rvc_config.py
+- rvc_inference/initialization.py → rvc_init.py
+- rvc_inference/modules.py - Remove Gradio returns
+- processing/workers.py - Replace SparkTTS with Triton client
+- processing/worker_manager.py - Minor import fixes
+- processing/utils.py - Import path fixes
+- processing/buffer_queue.py - Can use as-is
+- processing/model_threading.py - Adapt for Triton
+
+## Environment Variables (RVC)
+```
+RVC_ROOT=./rvc-ready
+weight_root=./rvc-ready/assets/weights
+index_root=./rvc-ready/logs
+rmvpe_root=./rvc-ready/assets/rmvpe
+```
+
+## Dependencies (RVC only - Triton has own)
+```
+fairseq @ git+https://github.com/One-sixth/fairseq.git
+faiss-cpu>=1.7.0
+pyworld==0.3.2
+praat-parselmouth>=0.4.2
+torchcrepe==0.0.23
+ffmpeg-python>=0.2.0
+av>=9.0.0
+soundfile==0.12.1
+librosa==0.10.2
+onnxruntime-gpu>=1.13.0
+numpy>=1.24.0,<2.0
+scipy>=1.9.0
+numba>=0.56.0
+python-dotenv>=1.0.0
+```
+
+## Colab Workflow (Target)
+```
+CELL 1: Setup udocker + pull Triton container
+CELL 2: Clone repo
+CELL 3: Install container deps + convert models (slow, unavoidable)
+CELL 4: Start Triton server (background)
+CELL 5: pip install RVC deps (no poetry)
+CELL 6: Download RVC assets + voice model
+CELL 7: Test pipeline
+CELL 8: API server (future)
+```
