@@ -53,12 +53,12 @@ File: rvc-ready/triton_client.py
 
 ### Step 4: Adapt workers for Triton
 File: rvc-ready/processing/workers.py
-- Replace SparkTTS import with triton_client
-- Remove cuda_stream from TTS worker (Triton handles GPU)
-- Fix RVC import paths
+- Replace SparkTTS import with TritonSparkClient
+- TTS worker: Remove CUDA stream (Triton handles GPU internally)
+- RVC workers: Keep CUDA streams for parallel inference
+- Fix RVC import paths to use rvc_init.get_vc()
+- Architecture: 1 Triton TTS (fast) → N RVC workers with streams (bottleneck)
 - See: rvc-in-progress/processing/TODO_workers.txt
-
-UserNote: We'd still need cuda streams. RVC doesn't use triton, only spark does, cuda streams are specifically used to be able to organize inference in an async way, so that Spark & Triton won't have to wait for RVCs to finish inference and separate RVC modules won't have to Wait for one antoher as well. Cuda streams are serving a role of container wrapper of sorts.
 
 ### Step 5: Create test script
 File: tools/test_pipeline.py

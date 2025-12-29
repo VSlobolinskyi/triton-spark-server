@@ -12,7 +12,7 @@ Usage:
 
 Environment:
     SPARK_MODEL_DIR: Where to save Spark model (default: ./pretrained_models/Spark-TTS-0.5B)
-    RVC_ROOT: Root directory for RVC assets (default: ./rvc-ready)
+    ASSETS_DIR: Directory for RVC assets (default: ./assets)
 """
 
 import os
@@ -141,7 +141,7 @@ def download_spark_model(model_dir: Path) -> bool:
 # RVC Assets Download
 # =============================================================================
 
-def download_rvc_assets(rvc_root: Path, include_pretrained: bool = False) -> bool:
+def download_rvc_assets(assets_dir: Path, include_pretrained: bool = False) -> bool:
     """Download RVC required assets."""
     print("\n" + "=" * 60)
     print("Downloading RVC Assets")
@@ -151,7 +151,7 @@ def download_rvc_assets(rvc_root: Path, include_pretrained: bool = False) -> boo
 
     # Download required models
     for subdir, models in RVC_REQUIRED_MODELS.items():
-        dest_dir = rvc_root / "assets" / subdir
+        dest_dir = assets_dir / subdir
         for model in models:
             url = f"{RVC_DOWNLOAD_LINK}{model}"
             if not download_file(url, dest_dir / model, f"{subdir}/{model}"):
@@ -162,13 +162,13 @@ def download_rvc_assets(rvc_root: Path, include_pretrained: bool = False) -> boo
         print("\n  [INFO] Downloading pretrained models (optional)...")
 
         # Pretrained v1
-        dest_dir = rvc_root / "assets" / "pretrained"
+        dest_dir = assets_dir / "pretrained"
         for model in RVC_PRETRAINED_V1:
             url = f"{RVC_DOWNLOAD_LINK}pretrained/{model}"
             download_file(url, dest_dir / model, f"pretrained/{model}")
 
         # Pretrained v2
-        dest_dir = rvc_root / "assets" / "pretrained_v2"
+        dest_dir = assets_dir / "pretrained_v2"
         for model in RVC_PRETRAINED_V1:
             url = f"{RVC_DOWNLOAD_LINK}pretrained_v2/{model}"
             download_file(url, dest_dir / model, f"pretrained_v2/{model}")
@@ -182,13 +182,14 @@ def download_rvc_assets(rvc_root: Path, include_pretrained: bool = False) -> boo
 # RVC Voice Model Download
 # =============================================================================
 
-def download_rvc_voice_model(url: str, rvc_root: Path) -> bool:
+def download_rvc_voice_model(url: str, assets_dir: Path, logs_dir: Path) -> bool:
     """
     Download and extract an RVC voice model from a zip URL.
 
     Args:
         url: URL to the zip file (e.g., HuggingFace)
-        rvc_root: Root directory for RVC assets
+        assets_dir: Directory for RVC assets (contains weights/)
+        logs_dir: Directory for logs and index files
     """
     import tempfile
     import zipfile
@@ -199,8 +200,7 @@ def download_rvc_voice_model(url: str, rvc_root: Path) -> bool:
     print("=" * 60)
 
     zip_filename = Path(url).name
-    weights_dir = rvc_root / "assets" / "weights"
-    logs_dir = rvc_root / "logs"
+    weights_dir = assets_dir / "weights"
 
     weights_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -274,21 +274,28 @@ def main():
         help="Directory for Spark model"
     )
     parser.add_argument(
-        "--rvc-dir", type=str,
-        default=os.environ.get("RVC_ROOT", "./rvc-ready"),
-        help="Root directory for RVC assets"
+        "--assets-dir", type=str,
+        default=os.environ.get("ASSETS_DIR", "./assets"),
+        help="Directory for RVC assets"
+    )
+    parser.add_argument(
+        "--logs-dir", type=str,
+        default=os.environ.get("LOGS_DIR", "./logs"),
+        help="Directory for logs and index files"
     )
 
     args = parser.parse_args()
 
     spark_dir = Path(args.spark_dir)
-    rvc_dir = Path(args.rvc_dir)
+    assets_dir = Path(args.assets_dir)
+    logs_dir = Path(args.logs_dir)
 
     print("=" * 60)
     print("Triton Spark TTS + RVC Asset Downloader")
     print("=" * 60)
     print(f"Spark model dir: {spark_dir}")
-    print(f"RVC root dir:    {rvc_dir}")
+    print(f"Assets dir:      {assets_dir}")
+    print(f"Logs dir:        {logs_dir}")
 
     success = True
 
@@ -299,12 +306,12 @@ def main():
 
     # Download RVC assets
     if not args.spark_only:
-        if not download_rvc_assets(rvc_dir, include_pretrained=not args.skip_pretrained):
+        if not download_rvc_assets(assets_dir, include_pretrained=not args.skip_pretrained):
             success = False
 
     # Download specific RVC voice model if provided
     if args.rvc_model:
-        if not download_rvc_voice_model(args.rvc_model, rvc_dir):
+        if not download_rvc_voice_model(args.rvc_model, assets_dir, logs_dir):
             success = False
 
     print("\n" + "=" * 60)
