@@ -38,7 +38,7 @@ RVC_DOWNLOAD_LINK = "https://huggingface.co/lj1995/VoiceConversionWebUI/resolve/
 # Required RVC models
 RVC_REQUIRED_MODELS = {
     "hubert": ["hubert_base.pt"],
-    "rmvpe": ["rmvpe.pt"],
+    "rmvpe": ["rmvpe.pt", "rmvpe.onnx"],
 }
 
 

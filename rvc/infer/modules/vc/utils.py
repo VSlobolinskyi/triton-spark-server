@@ -1,7 +1,21 @@
 import os
 from pathlib import Path
+import functools
 
+import torch
 from fairseq import checkpoint_utils
+
+# PyTorch 2.6+ changed torch.load default to weights_only=True
+# Fairseq checkpoints need weights_only=False to load properly
+_original_torch_load = torch.load
+
+@functools.wraps(_original_torch_load)
+def _patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
+torch.load = _patched_torch_load
 
 
 def get_index_path_from_model(sid):
