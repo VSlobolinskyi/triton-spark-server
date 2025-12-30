@@ -260,7 +260,7 @@ def run_rvc(
             filter_radius=filter_radius,
             rms_mix_rate=rms_mix_rate,
             protect=protect,
-            resample_sr=16000,  # Resample to match TTS output
+            resample_sr=0,  # 0 = keep native sample rate (40kHz), best quality
         )
 
         result = _rvc_server.get_result(timeout=60.0)

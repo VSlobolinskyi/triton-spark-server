@@ -377,7 +377,7 @@ class RVCServer:
                     pitch_shift=0,
                     f0_method="rmvpe",  # This triggers rmvpe loading
                     index_rate=0.0,
-                    resample_sr=16000,
+                    resample_sr=0,  # 0 = keep native sample rate
                 )
 
                 result = self.get_result(timeout=timeout)
