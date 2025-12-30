@@ -5,7 +5,8 @@
       "Bash(node analyze.js calls submit_job)",
       "Bash(node schema.js:*)",
       "Bash(node patterns.js:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(cat:*)"
     ]
   }
 }

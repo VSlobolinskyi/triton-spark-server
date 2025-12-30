@@ -3,7 +3,6 @@
 ├── .gitignore
 ├── .vscode
 │   └── settings.json
-├── analyze.js
 ├── assets
 │   ├── hubert
 │   ├── rmvpe
@@ -15,13 +14,10 @@
 ├── colab
 │   ├── triton_spark_rvc.ipynb
 │   └── triton_spark_rvc_unified.ipynb
-├── complexity.js
-├── deps.js
 ├── docker-compose.rvc.yml
 ├── docker-compose.voice.yml
 ├── Dockerfile.rvc
 ├── Dockerfile.voice
-├── generate-structure.js
 ├── LICENSE
 ├── logs
 │   └── mute
@@ -39,11 +35,67 @@
 │       │   └── mute.npy
 │       └── 3_feature768
 │           └── mute.npy
-├── patterns.js
+├── macros
+│   ├── analyze-v2.js
+│   ├── analyze.js
+│   ├── api-docs.js
+│   ├── complexity.js
+│   ├── deps.js
+│   ├── flow.js
+│   ├── generate-structure.js
+│   ├── grpc-audit.js
+│   ├── index.js
+│   ├── model-audit.js
+│   ├── patterns.js
+│   ├── refactor.js
+│   ├── replace.js
+│   ├── resource-audit.js
+│   ├── schema-export.js
+│   ├── schema.js
+│   └── worker-audit.js
 ├── pyproject.toml
+├── quantum-logic
+│   ├── atoms
+│   │   ├── calls.js
+│   │   ├── complexity.js
+│   │   ├── decorates.js
+│   │   ├── defines.js
+│   │   ├── exports.js
+│   │   ├── files.js
+│   │   ├── imports.js
+│   │   ├── index.js
+│   │   ├── inherits.js
+│   │   ├── mutates.js
+│   │   ├── params.js
+│   │   ├── returns.js
+│   │   └── utils.js
+│   ├── derive-macros.js
+│   ├── index.js
+│   ├── molecules
+│   │   ├── api-surface.js
+│   │   ├── circular.js
+│   │   ├── coupling.js
+│   │   ├── dead-code.js
+│   │   ├── duplicates.js
+│   │   ├── endpoints.js
+│   │   ├── entry-points.js
+│   │   ├── hierarchy.js
+│   │   ├── hotspots.js
+│   │   ├── impact.js
+│   │   ├── index.js
+│   │   ├── orphans.js
+│   │   ├── patterns.js
+│   │   ├── risk-score.js
+│   │   ├── side-effects.js
+│   │   └── utils.js
+│   ├── organisms
+│   │   ├── health.js
+│   │   ├── index.js
+│   │   ├── overview.js
+│   │   ├── refactor-plan.js
+│   │   └── utils.js
+│   └── README.md
 ├── README.md
-├── refactor.js
-├── replace.js
 ├── requirements.txt
 ├── rvc
 │   ├── api
@@ -116,7 +168,6 @@
 │   │   └── __init__.py
 │   ├── triton_client.py
 │   └── __init__.py
-├── schema.js
 ├── scripts
 │   ├── install_rvc_in_container.sh
 │   └── start_services.sh
@@ -149,6 +200,7 @@
 │       ├── parse_options.sh
 │       ├── token_parser.py
 │       └── __init__.py
+├── struct.txt
 ├── tests
 │   ├── test_connection.py
 │   ├── test_http_api.py

@@ -36,7 +36,7 @@ for (const arg of args) {
 }
 
 // Security: Ensure we only operate within the project directory
-const scriptDir = path.dirname(path.resolve(__filename));
+const scriptDir = path.dirname(path.dirname(path.resolve(__filename))); // Go up from macros/
 const resolvedSearchPath = path.resolve(searchPath);
 
 if (!resolvedSearchPath.startsWith(scriptDir)) {

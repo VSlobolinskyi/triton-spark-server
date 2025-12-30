@@ -235,6 +235,7 @@ def run_rvc(audio: np.ndarray, pitch_shift: int, f0_method: str, index_rate: flo
             pitch_shift=pitch_shift,
             f0_method=f0_method,
             index_rate=index_rate,
+            resample_sr=16000,  # Resample to match TTS output
         )
 
         result = _rvc_server.get_result(timeout=60.0)

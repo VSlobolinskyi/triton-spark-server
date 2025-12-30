@@ -2,8 +2,9 @@
 const fs = require("fs");
 const path = require("path");
 
-const targetDir = path.join(__dirname, "./");
-const outputFile = path.join(__dirname, "struct.txt");
+const projectRoot = path.dirname(__dirname); // Go up from macros/
+const targetDir = projectRoot;
+const outputFile = path.join(projectRoot, "struct.txt");
 
 function generateStructure(dir, indent = "") {
   let structure = "";
