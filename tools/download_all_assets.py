@@ -171,22 +171,66 @@ def download_rvc_voice_model(url: str, assets_dir: Path, logs_dir: Path) -> bool
     import tempfile
     import zipfile
     import shutil
+    import re
 
     print("\n" + "=" * 60)
     print(f"Downloading RVC Voice Model")
     print("=" * 60)
 
-    zip_filename = Path(url).name
+    # Extract clean filename from URL (handle ?download=true etc.)
+    url_path = url.split("?")[0]  # Remove query params
+    zip_filename = Path(url_path).name
+    if not zip_filename.endswith(".zip"):
+        zip_filename = "model.zip"
+
     weights_dir = assets_dir / "weights"
 
     weights_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Download zip
-    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
+    # Use a fixed temp path so we can detect incomplete downloads
+    tmp_path = Path(tempfile.gettempdir()) / f"rvc_download_{zip_filename}"
 
-    if not download_file(url, tmp_path, zip_filename):
+    # Always re-download to temp (don't trust cached files)
+    # The check for existing files happens after extraction
+    if tmp_path.exists():
+        print(f"  [CLEAN] Removing previous temp file...")
+        tmp_path.unlink()
+
+    print(f"  [DOWNLOAD] {zip_filename}...")
+    try:
+        # Follow redirects and download
+        with requests.get(url, stream=True, allow_redirects=True) as r:
+            r.raise_for_status()
+            total = int(r.headers.get('content-length', 0))
+            downloaded = 0
+
+            with open(tmp_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = downloaded * 100 // total
+                        print(f"\r  [DOWNLOAD] {zip_filename}... {pct}%", end="")
+
+            print(f"\r  [DONE] Downloaded {zip_filename}" + " " * 20)
+
+    except Exception as e:
+        print(f"\n  [ERROR] Failed to download {url}: {e}")
+        if tmp_path.exists():
+            tmp_path.unlink()
+        return False
+
+    # Verify it's a valid zip before extraction
+    if not zipfile.is_zipfile(tmp_path):
+        print(f"  [ERROR] Downloaded file is not a valid zip archive")
+        print(f"  [INFO] File size: {tmp_path.stat().st_size} bytes")
+        # Check if it's HTML (common redirect issue)
+        with open(tmp_path, 'rb') as f:
+            header = f.read(100)
+            if b'<!DOCTYPE' in header or b'<html' in header.lower():
+                print(f"  [ERROR] Received HTML instead of zip - URL may require authentication")
+        tmp_path.unlink()
         return False
 
     # Extract
@@ -199,18 +243,28 @@ def download_rvc_voice_model(url: str, assets_dir: Path, logs_dir: Path) -> bool
                 zip_ref.extractall(tmpdir)
 
             # Move files to correct locations
-            for f in tmpdir.rglob("*.pth"):
+            pth_files = list(tmpdir.rglob("*.pth"))
+            index_files = list(tmpdir.rglob("*.index"))
+
+            if not pth_files:
+                print(f"  [WARN] No .pth files found in archive")
+
+            for f in pth_files:
                 dest = weights_dir / f.name
                 print(f"  [MOVE] {f.name} -> assets/weights/")
                 shutil.move(str(f), str(dest))
 
-            for f in tmpdir.rglob("*.index"):
+            for f in index_files:
                 dest = logs_dir / f.name
                 print(f"  [MOVE] {f.name} -> logs/")
                 shutil.move(str(f), str(dest))
 
         print("  [DONE] Voice model extracted successfully")
         return True
+
+    except zipfile.BadZipFile as e:
+        print(f"  [ERROR] Corrupt zip file: {e}")
+        return False
 
     except Exception as e:
         print(f"  [ERROR] Failed to extract: {e}")
