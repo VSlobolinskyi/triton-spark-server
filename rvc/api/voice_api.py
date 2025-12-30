@@ -226,7 +226,7 @@ def run_rvc(
     protect: float = 0.33,
 ) -> tuple:
     """
-    Run RVC conversion. Returns (audio, time).
+    Run RVC conversion. Returns (audio, sample_rate, time).
 
     Args:
         audio: Input audio array (16kHz, float32)
@@ -236,9 +236,12 @@ def run_rvc(
         filter_radius: Median filter for pitch smoothing (0-7)
         rms_mix_rate: Volume envelope mix (0.0=input, 1.0=output)
         protect: Consonant protection (0.0=max, 0.5=none)
+
+    Returns:
+        tuple: (audio_array, sample_rate, processing_time)
     """
     if _rvc_server is None:
-        return audio, 0.0
+        return audio, 16000, 0.0
 
     # Create temp files
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f_in:
@@ -267,8 +270,8 @@ def run_rvc(
         elapsed = time.time() - start
 
         if result and result.success:
-            output_audio, _ = sf.read(output_path)
-            return output_audio.astype(np.float32), elapsed
+            output_audio, output_sr = sf.read(output_path)
+            return output_audio.astype(np.float32), output_sr, elapsed
         else:
             raise RuntimeError(result.error if result else "Timeout")
 
@@ -397,8 +400,9 @@ async def synthesize(
             # RVC for this sentence
             if skip_rvc or _rvc_server is None:
                 segment_audio = tts_audio
+                output_sr = 16000  # TTS native rate
             else:
-                segment_audio, rvc_time = run_rvc(
+                segment_audio, output_sr, rvc_time = run_rvc(
                     tts_audio,
                     pitch_shift,
                     f0_method,
@@ -421,8 +425,8 @@ async def synthesize(
 
         _stats["successful"] += 1
 
-        # Return audio as WAV
-        wav_bytes = audio_to_wav_bytes(final_audio, 16000)
+        # Return audio as WAV (use RVC output sample rate, typically 40kHz)
+        wav_bytes = audio_to_wav_bytes(final_audio, output_sr)
 
         return StreamingResponse(
             io.BytesIO(wav_bytes),
@@ -431,8 +435,9 @@ async def synthesize(
                 "X-TTS-Time": str(total_tts_time),
                 "X-RVC-Time": str(total_rvc_time),
                 "X-Total-Time": str(total_time),
-                "X-Audio-Duration": str(len(final_audio) / 16000),
+                "X-Audio-Duration": str(len(final_audio) / output_sr),
                 "X-Sentences": str(len(sentences)),
+                "X-Sample-Rate": str(output_sr),
             }
         )
 
@@ -492,9 +497,10 @@ async def synthesize_stream(
                     # RVC
                     if skip_rvc or _rvc_server is None:
                         final_audio = tts_audio
+                        output_sr = 16000
                         rvc_time = 0.0
                     else:
-                        final_audio, rvc_time = run_rvc(
+                        final_audio, output_sr, rvc_time = run_rvc(
                             tts_audio,
                             pitch_shift,
                             f0_method,
@@ -504,7 +510,7 @@ async def synthesize_stream(
                             protect,
                         )
 
-                    wav_bytes = audio_to_wav_bytes(final_audio, 16000)
+                    wav_bytes = audio_to_wav_bytes(final_audio, output_sr)
 
                     # Yield as multipart chunk
                     yield (
@@ -601,7 +607,7 @@ async def rvc_only(
         input_audio, sr = sf.read(audio_buffer)
         input_audio = input_audio.astype(np.float32)
 
-        output_audio, rvc_time = run_rvc(
+        output_audio, output_sr, rvc_time = run_rvc(
             input_audio,
             pitch_shift,
             f0_method,
@@ -613,14 +619,15 @@ async def rvc_only(
 
         _stats["successful"] += 1
 
-        wav_bytes = audio_to_wav_bytes(output_audio, 16000)
+        wav_bytes = audio_to_wav_bytes(output_audio, output_sr)
 
         return StreamingResponse(
             io.BytesIO(wav_bytes),
             media_type="audio/wav",
             headers={
                 "X-Processing-Time": str(rvc_time),
-                "X-Audio-Duration": str(len(output_audio) / 16000),
+                "X-Audio-Duration": str(len(output_audio) / output_sr),
+                "X-Sample-Rate": str(output_sr),
             }
         )
 
