@@ -35,7 +35,7 @@ class TritonSparkTTS:
         
         # Use your existing client_grpc.py - no changes needed since server ports are forwarded
         cmd = [
-            "python", "runtime/triton_trtllm/client_grpc.py",
+            "python", "triton/client_grpc.py",
             "--server-addr", "localhost",
             "--reference-audio", str(prompt_speech_path),
             "--reference-text", prompt_text if prompt_text else "",

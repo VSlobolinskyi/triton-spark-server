@@ -36,7 +36,24 @@ from typing import Optional, List
 import soundfile as sf
 
 from rvc.triton_client import TritonSparkClient
-from rvc.server import RVCServer, start_rvc_server, shutdown_rvc_server, get_rvc_server
+from rvc.server import (
+    RVCServer,
+    start_rvc_server,
+    shutdown_rvc_server,
+    get_rvc_server,
+    RVCClient,
+    get_rvc_client,
+    is_daemon_running,
+)
+
+# Import gRPC client (optional - may not have proto generated yet)
+try:
+    from rvc.grpc import RVCGrpcClient, get_rvc_grpc_client
+    GRPC_AVAILABLE = True
+except ImportError:
+    GRPC_AVAILABLE = False
+    RVCGrpcClient = None
+    get_rvc_grpc_client = None
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +143,11 @@ class TTSRVCPipeline:
 
         self.tts_client: Optional[TritonSparkClient] = None
         self.rvc_server: Optional[RVCServer] = None
+        self.rvc_client: Optional[RVCClient] = None  # For socket daemon connection
+        self.rvc_grpc_client = None  # For gRPC Docker connection
         self._initialized = False
+        self._using_daemon = False
+        self._using_grpc = False
 
     def initialize(self, timeout: float = 120.0) -> bool:
         """
@@ -156,25 +177,43 @@ class TTSRVCPipeline:
             logger.error("Triton server not ready!")
             return False
 
-        # Initialize RVC server - check if one is already running first
-        existing_server = get_rvc_server()
-        if existing_server is not None and existing_server.is_running:
-            logger.info("Using existing RVC server")
-            self.rvc_server = existing_server
-        elif self.rvc_model:
-            logger.info(f"Starting RVC server with {self.num_rvc_workers} workers...")
-            try:
-                self.rvc_server = start_rvc_server(
-                    model_name=self.rvc_model,
-                    num_workers=self.num_rvc_workers,
-                    timeout=timeout,
-                )
-            except Exception as e:
-                logger.error(f"Failed to start RVC server: {e}")
-                return False
-            logger.info("RVC server ready!")
-        else:
-            logger.info("No RVC model specified and no existing server - TTS-only mode")
+        # Initialize RVC - try in order: gRPC Docker → socket daemon → in-process
+        # 1. Try gRPC client (Docker container or remote server)
+        if GRPC_AVAILABLE:
+            self.rvc_grpc_client = get_rvc_grpc_client()
+            if self.rvc_grpc_client is not None:
+                logger.info("Connected to RVC gRPC server (Docker/remote)")
+                self._using_grpc = True
+
+        # 2. Try socket daemon (started via rvc_server_control.py)
+        if not self._using_grpc:
+            self.rvc_client = get_rvc_client()
+            if self.rvc_client is not None:
+                logger.info("Connected to RVC socket daemon")
+                self._using_daemon = True
+
+        # 3. Try existing in-process server
+        if not self._using_grpc and not self._using_daemon:
+            if get_rvc_server() is not None and get_rvc_server().is_running:
+                logger.info("Using existing in-process RVC server")
+                self.rvc_server = get_rvc_server()
+
+        # 4. Start new in-process server if model specified
+        if not self._using_grpc and not self._using_daemon and self.rvc_server is None:
+            if self.rvc_model:
+                logger.info(f"Starting RVC server with {self.num_rvc_workers} workers...")
+                try:
+                    self.rvc_server = start_rvc_server(
+                        model_name=self.rvc_model,
+                        num_workers=self.num_rvc_workers,
+                        timeout=timeout,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to start RVC server: {e}")
+                    return False
+                logger.info("RVC server ready!")
+            else:
+                logger.info("No RVC model specified and no existing server - TTS-only mode")
 
         self._initialized = True
         return True
@@ -244,12 +283,28 @@ class TTSRVCPipeline:
 
                 if tts_path and os.path.exists(tts_path):
                     rvc_output = os.path.join(self.rvc_output_dir, f"fragment_{i}.wav")
-                    job_id = self.rvc_server.submit_job(
-                        input_audio_path=tts_path,
-                        output_audio_path=rvc_output,
-                        pitch_shift=self.pitch_shift,
-                        f0_method=self.f0_method,
-                    )
+                    # Use gRPC, daemon, or in-process server depending on mode
+                    if self._using_grpc and self.rvc_grpc_client:
+                        job_id = self.rvc_grpc_client.submit_job(
+                            input_path=tts_path,
+                            output_path=rvc_output,
+                            pitch_shift=self.pitch_shift,
+                            f0_method=self.f0_method,
+                        )
+                    elif self._using_daemon and self.rvc_client:
+                        job_id = self.rvc_client.submit_job(
+                            input_audio_path=tts_path,
+                            output_audio_path=rvc_output,
+                            pitch_shift=self.pitch_shift,
+                            f0_method=self.f0_method,
+                        )
+                    else:
+                        job_id = self.rvc_server.submit_job(
+                            input_audio_path=tts_path,
+                            output_audio_path=rvc_output,
+                            pitch_shift=self.pitch_shift,
+                            f0_method=self.f0_method,
+                        )
                     submitted_count[0] += 1
                     logger.info(f"  RVC job {job_id} submitted for fragment {i}")
 
@@ -294,8 +349,8 @@ class TTSRVCPipeline:
 
         pipeline_start = time.time()
 
-        # TTS-only mode (no RVC)
-        if self.rvc_server is None:
+        # TTS-only mode (no RVC server, daemon, or gRPC)
+        if self.rvc_server is None and not self._using_daemon and not self._using_grpc:
             for i, sentence in enumerate(sentences):
                 results[i].sentence = sentence
                 logger.info(f"TTS [{i+1}/{num_sentences}]: {sentence[:40]}...")
@@ -348,10 +403,35 @@ class TTSRVCPipeline:
         logger.info(f"All {submitted_count[0]} RVC jobs submitted, waiting for results...")
 
         # Collect RVC results
-        rvc_results = self.rvc_server.get_all_results(
-            expected_count=submitted_count[0],
-            timeout=timeout,
-        )
+        if self._using_grpc and self.rvc_grpc_client:
+            # Collect results via gRPC client
+            rvc_results = []
+            start_time = time.time()
+            while len(rvc_results) < submitted_count[0]:
+                remaining = timeout - (time.time() - start_time)
+                if remaining <= 0:
+                    logger.warning(f"Timeout: got {len(rvc_results)}/{submitted_count[0]} results")
+                    break
+                result = self.rvc_grpc_client.get_result(timeout=min(remaining, 1.0))
+                if result:
+                    rvc_results.append(result)
+        elif self._using_daemon and self.rvc_client:
+            # Collect results via socket client
+            rvc_results = []
+            start_time = time.time()
+            while len(rvc_results) < submitted_count[0]:
+                remaining = timeout - (time.time() - start_time)
+                if remaining <= 0:
+                    logger.warning(f"Timeout: got {len(rvc_results)}/{submitted_count[0]} results")
+                    break
+                result = self.rvc_client.get_result(timeout=min(remaining, 1.0))
+                if result:
+                    rvc_results.append(result)
+        else:
+            rvc_results = self.rvc_server.get_all_results(
+                expected_count=submitted_count[0],
+                timeout=timeout,
+            )
 
         # Map RVC results back to pipeline results
         for rvc_result in rvc_results:
@@ -385,11 +465,21 @@ class TTSRVCPipeline:
             self.tts_client.close()
             self.tts_client = None
 
+        if self.rvc_grpc_client:
+            self.rvc_grpc_client.close()
+            self.rvc_grpc_client = None
+
+        if self.rvc_client:
+            self.rvc_client.close()
+            self.rvc_client = None
+
         if self.rvc_server:
             shutdown_rvc_server()
             self.rvc_server = None
 
         self._initialized = False
+        self._using_daemon = False
+        self._using_grpc = False
         logger.info("Pipeline shutdown complete")
 
     def __enter__(self):
@@ -400,9 +490,15 @@ class TTSRVCPipeline:
         if self.auto_shutdown:
             self.shutdown()
         else:
-            # Only close TTS client, keep RVC server running
+            # Only close clients, keep RVC server/daemon/Docker running
             if self.tts_client:
                 self.tts_client.close()
                 self.tts_client = None
-            logger.info("Pipeline context exited (RVC server still running)")
+            if self.rvc_grpc_client:
+                self.rvc_grpc_client.close()
+                self.rvc_grpc_client = None
+            if self.rvc_client:
+                self.rvc_client.close()
+                self.rvc_client = None
+            logger.info("Pipeline context exited (RVC server/daemon/Docker still running)")
         return False

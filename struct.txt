@@ -1,14 +1,27 @@
+├── .claude
+│   └── settings.local.json
 ├── .gitignore
 ├── .vscode
 │   └── settings.json
+├── analyze.js
 ├── assets
 │   ├── hubert
 │   ├── rmvpe
+│   │   ├── rmvpe.onnx
+│   │   ├── rmvpe.pt
+│   │   └── rmvpe_inputs.pth
 │   └── weights
+├── CLAUDE.md
 ├── colab
-│   └── triton_spark_rvc.ipynb
+│   ├── triton_spark_rvc.ipynb
+│   └── triton_spark_rvc_unified.ipynb
+├── complexity.js
+├── deps.js
+├── docker-compose.rvc.yml
+├── docker-compose.voice.yml
+├── Dockerfile.rvc
+├── Dockerfile.voice
 ├── generate-structure.js
-├── INTEGRATION_STATUS.md
 ├── LICENSE
 ├── logs
 │   └── mute
@@ -26,39 +39,16 @@
 │       │   └── mute.npy
 │       └── 3_feature768
 │           └── mute.npy
-├── PROPOSED_STRUCTURE.md
+├── patterns.js
 ├── pyproject.toml
 ├── README.md
+├── refactor.js
+├── replace.js
 ├── requirements.txt
-├── runtime
-│   └── triton_trtllm
-│       ├── client_grpc.py
-│       ├── docker-compose.yml
-│       ├── Dockerfile.server
-│       ├── model_repo
-│       │   ├── audio_tokenizer
-│       │   │   ├── 1
-│       │   │   │   └── model.py
-│       │   │   └── config.pbtxt
-│       │   ├── spark_tts
-│       │   │   ├── 1
-│       │   │   │   └── model.py
-│       │   │   └── config.pbtxt
-│       │   ├── tensorrt_llm
-│       │   │   ├── 1
-│       │   │   │   └── .gitkeep
-│       │   │   └── config.pbtxt
-│       │   └── vocoder
-│       │       ├── 1
-│       │       │   └── model.py
-│       │       └── config.pbtxt
-│       ├── README.md
-│       ├── run.sh
-│       ├── scripts
-│       │   ├── convert_checkpoint.py
-│       │   └── fill_template.py
-│       └── TritonSparkTTS.py
 ├── rvc
+│   ├── api
+│   │   ├── voice_api.py
+│   │   └── __init__.py
 │   ├── configs
 │   │   ├── v1
 │   │   │   ├── 32k.json
@@ -69,6 +59,15 @@
 │   │       └── 48k.json
 │   ├── download_assets.py
 │   ├── download_model.py
+│   ├── grpc
+│   │   ├── generate_proto.py
+│   │   ├── rvc_grpc_client.py
+│   │   ├── rvc_grpc_server.py
+│   │   ├── rvc_service.proto
+│   │   ├── voice_client.py
+│   │   ├── voice_server.py
+│   │   ├── voice_service.proto
+│   │   └── __init__.py
 │   ├── infer
 │   │   ├── lib
 │   │   │   ├── audio.py
@@ -103,16 +102,24 @@
 │   │   └── __init__.py
 │   ├── processing
 │   │   ├── buffer_queue.py
-│   │   ├── utils.py
+│   │   ├── pipeline.py
+│   │   ├── pipeline_helpers.py
 │   │   ├── workers.py
 │   │   ├── worker_manager.py
 │   │   └── __init__.py
 │   ├── rvc_config.py
 │   ├── rvc_init.py
 │   ├── rvc_modules.py
+│   ├── server
+│   │   ├── rvc_client.py
+│   │   ├── rvc_server.py
+│   │   └── __init__.py
 │   ├── triton_client.py
 │   └── __init__.py
-├── rvc_collab_script.txt
+├── schema.js
+├── scripts
+│   ├── install_rvc_in_container.sh
+│   └── start_services.sh
 ├── sparktts
 │   ├── models
 │   │   ├── audio_tokenizer.py
@@ -142,14 +149,43 @@
 │       ├── parse_options.sh
 │       ├── token_parser.py
 │       └── __init__.py
-├── struct.txt
-├── TODO.txt
+├── tests
+│   ├── test_connection.py
+│   ├── test_http_api.py
+│   ├── test_pipeline.py
+│   ├── test_rvc.py
+│   ├── test_tts.py
+│   └── __init__.py
 ├── tools
 │   ├── download_all_assets.py
-│   ├── init_rvc.py
-│   ├── run_rvc.py
-│   ├── run_tts.py
+│   ├── rvc_server_control.py
+│   ├── rvc_server_daemon.py
 │   ├── setup_environment.py
-│   ├── test_pipeline.py
-│   └── test_triton_connection.py
-└── triton_collab_scritps.txt
+│   └── worker_control.py
+└── triton
+    ├── client_grpc.py
+    ├── docker-compose.yml
+    ├── Dockerfile.server
+    ├── model_repo
+    │   ├── audio_tokenizer
+    │   │   ├── 1
+    │   │   │   └── model.py
+    │   │   └── config.pbtxt
+    │   ├── spark_tts
+    │   │   ├── 1
+    │   │   │   └── model.py
+    │   │   └── config.pbtxt
+    │   ├── tensorrt_llm
+    │   │   ├── 1
+    │   │   │   └── .gitkeep
+    │   │   └── config.pbtxt
+    │   └── vocoder
+    │       ├── 1
+    │       │   └── model.py
+    │       └── config.pbtxt
+    ├── README.md
+    ├── run.sh
+    ├── scripts
+    │   ├── convert_checkpoint.py
+    │   └── fill_template.py
+    └── TritonSparkTTS.py

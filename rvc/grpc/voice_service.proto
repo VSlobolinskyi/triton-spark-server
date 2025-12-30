@@ -1,0 +1,241 @@
+// Unified Voice Synthesis Service (TTS + RVC)
+//
+// Combines Spark TTS and RVC voice conversion into a single service.
+// Text goes in, voice-converted audio comes out.
+//
+// Generate Python code:
+//   python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. voice_service.proto
+
+syntax = "proto3";
+
+package voice;
+
+// Unified Voice Synthesis Service
+service VoiceService {
+    // Synthesize text with voice conversion (main endpoint)
+    // Text + reference audio → voice-converted speech
+    rpc Synthesize(SynthesizeRequest) returns (SynthesizeResponse);
+
+    // Synthesize multiple sentences (returns results as they complete)
+    rpc SynthesizeStream(SynthesizeRequest) returns (stream SynthesizeResponse);
+
+    // Batch synthesize (for processing multiple texts)
+    rpc SynthesizeBatch(BatchSynthesizeRequest) returns (stream SynthesizeResponse);
+
+    // TTS only (skip RVC) - useful for testing
+    rpc TTSOnly(TTSRequest) returns (TTSResponse);
+
+    // RVC only (convert existing audio)
+    rpc RVCOnly(RVCRequest) returns (RVCResponse);
+
+    // Get server status
+    rpc GetStatus(StatusRequest) returns (StatusResponse);
+
+    // Health check
+    rpc HealthCheck(HealthRequest) returns (HealthResponse);
+
+    // Load/change RVC model at runtime
+    rpc LoadModel(LoadModelRequest) returns (LoadModelResponse);
+}
+
+// Audio format enum
+enum AudioFormat {
+    WAV = 0;
+    PCM_FLOAT32 = 1;  // Raw PCM float32 samples
+}
+
+// Main synthesis request - text to voice-converted speech
+message SynthesizeRequest {
+    // Text to synthesize
+    string text = 1;
+
+    // Reference audio for TTS voice cloning
+    // Either provide bytes or path (path only works if server has access)
+    bytes reference_audio = 2;
+    string reference_audio_path = 3;  // Alternative: file path on server
+    AudioFormat reference_format = 4;
+    int32 reference_sample_rate = 5;
+
+    // Reference text (transcript of reference audio)
+    string reference_text = 6;
+
+    // RVC conversion parameters
+    int32 pitch_shift = 10;         // Semitones (-12 to +12), default 0
+    string f0_method = 11;          // "rmvpe", "harvest", "dio", "pm"
+    float index_rate = 12;          // Voice similarity (0.0 to 1.0), default 0.75
+    int32 filter_radius = 13;       // Median filter (0-7), default 3
+    int32 resample_sr = 14;         // Output sample rate (0 = 16000)
+    float rms_mix_rate = 15;        // Volume envelope (0.0 to 1.0), default 0.25
+    float protect = 16;             // Protect consonants (0.0 to 0.5), default 0.33
+
+    // Options
+    bool skip_rvc = 20;             // If true, return TTS output directly
+    string request_id = 21;         // Optional tracking ID
+}
+
+// Synthesis response
+message SynthesizeResponse {
+    bool success = 1;
+
+    // Output audio
+    bytes audio_data = 2;
+    AudioFormat format = 3;
+    int32 sample_rate = 4;
+
+    // Timing info
+    float tts_time = 5;             // TTS processing time (seconds)
+    float rvc_time = 6;             // RVC processing time (seconds)
+    float total_time = 7;           // Total processing time
+
+    // Processing info
+    int32 rvc_worker_id = 8;        // Which RVC worker was used
+
+    // For streaming: sentence info
+    int32 sentence_index = 9;       // Which sentence (0-indexed)
+    string sentence_text = 10;      // The sentence that was processed
+    bool is_final = 11;             // True if this is the last sentence
+
+    // Error info
+    string error = 12;
+    string request_id = 13;
+}
+
+// Batch synthesis request
+message BatchSynthesizeRequest {
+    // Multiple texts to synthesize
+    repeated string texts = 1;
+
+    // Shared reference audio (same for all)
+    bytes reference_audio = 2;
+    string reference_audio_path = 3;
+    AudioFormat reference_format = 4;
+    int32 reference_sample_rate = 5;
+    string reference_text = 6;
+
+    // Shared RVC parameters
+    int32 pitch_shift = 10;
+    string f0_method = 11;
+    float index_rate = 12;
+    int32 filter_radius = 13;
+    int32 resample_sr = 14;
+    float rms_mix_rate = 15;
+    float protect = 16;
+
+    // Options
+    bool skip_rvc = 20;
+    string request_id = 21;
+}
+
+// TTS-only request (for testing/comparison)
+message TTSRequest {
+    string text = 1;
+    bytes reference_audio = 2;
+    string reference_audio_path = 3;
+    AudioFormat reference_format = 4;
+    int32 reference_sample_rate = 5;
+    string reference_text = 6;
+    string request_id = 7;
+}
+
+// TTS-only response
+message TTSResponse {
+    bool success = 1;
+    bytes audio_data = 2;
+    AudioFormat format = 3;
+    int32 sample_rate = 4;
+    float processing_time = 5;
+    string error = 6;
+    string request_id = 7;
+}
+
+// RVC-only request (convert existing audio)
+message RVCRequest {
+    bytes audio_data = 1;
+    string audio_path = 2;          // Alternative: file path
+    AudioFormat format = 3;
+    int32 sample_rate = 4;
+
+    // RVC parameters
+    int32 pitch_shift = 10;
+    string f0_method = 11;
+    float index_rate = 12;
+    int32 filter_radius = 13;
+    int32 resample_sr = 14;
+    float rms_mix_rate = 15;
+    float protect = 16;
+
+    string request_id = 17;
+}
+
+// RVC-only response
+message RVCResponse {
+    bool success = 1;
+    bytes audio_data = 2;
+    AudioFormat format = 3;
+    int32 sample_rate = 4;
+    float processing_time = 5;
+    int32 worker_id = 6;
+    string error = 7;
+    string request_id = 8;
+}
+
+// Status request
+message StatusRequest {}
+
+// Status response
+message StatusResponse {
+    bool running = 1;
+
+    // TTS status
+    bool tts_ready = 2;
+    string tts_model = 3;
+    string triton_server = 4;       // Triton server address
+
+    // RVC status
+    bool rvc_ready = 5;
+    string rvc_model = 6;
+    int32 rvc_workers = 7;
+    int32 rvc_workers_alive = 8;
+
+    // Statistics
+    int64 total_requests = 10;
+    int64 successful_requests = 11;
+    int64 failed_requests = 12;
+    float uptime = 13;
+
+    // Per-worker info
+    repeated WorkerStatus workers = 14;
+}
+
+message WorkerStatus {
+    int32 worker_id = 1;
+    bool alive = 2;
+    int64 jobs_processed = 3;
+    float avg_processing_time = 4;
+}
+
+// Health check
+message HealthRequest {}
+
+message HealthResponse {
+    bool healthy = 1;
+    string status = 2;              // "ready", "loading", "degraded", "error"
+    string message = 3;
+
+    // Component health
+    bool tts_healthy = 4;
+    bool rvc_healthy = 5;
+}
+
+// Load model request (change RVC model at runtime)
+message LoadModelRequest {
+    string model_name = 1;          // Model filename in weights directory
+    int32 num_workers = 2;          // Number of workers (0 = keep current)
+}
+
+message LoadModelResponse {
+    bool success = 1;
+    string error = 2;
+    string loaded_model = 3;
+    int32 num_workers = 4;
+}

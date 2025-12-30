@@ -77,13 +77,13 @@ results/
 demo/
 .gradio/
 server_log.txt
-test_*.py
+struct.txt
 
 # -----------------------------------------------------------------------------
-# Project-specific: Old/temporary directories
+# Temporary planning docs
 # -----------------------------------------------------------------------------
-rvc-in-progress/
-rvc-ready/
+*.bak
+*.backup
 
 # -----------------------------------------------------------------------------
 # Misc

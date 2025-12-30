@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node replace.js:*)",
+      "Bash(node analyze.js calls submit_job)",
+      "Bash(node schema.js:*)",
+      "Bash(node patterns.js:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

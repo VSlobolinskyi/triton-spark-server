@@ -1,0 +1,73 @@
+# Unified Voice Service Docker Image
+# Combines TTS (via Triton) + RVC in a single gRPC service
+#
+# Build:
+#   docker build -f Dockerfile.voice -t voice-server .
+#
+# Run:
+#   docker run -d --gpus all \
+#     -v ./weights:/app/weights \
+#     -e RVC_MODEL=SilverWolf.pth \
+#     -e RVC_WORKERS=2 \
+#     -e TRITON_SERVER_ADDR=triton \
+#     -p 50052:50052 \
+#     voice-server
+
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional dependencies for gRPC
+RUN pip install --no-cache-dir \
+    grpcio \
+    grpcio-tools \
+    tritonclient[grpc] \
+    soundfile \
+    scipy \
+    librosa \
+    faiss-cpu \
+    praat-parselmouth \
+    torchcrepe
+
+# Copy the application code
+COPY rvc/ /app/rvc/
+
+# Generate proto files
+RUN python -m rvc.grpc.generate_proto
+
+# Create directories
+RUN mkdir -p /app/weights /app/TEMP/spark /app/TEMP/rvc
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV RVC_MODEL=model.pth
+ENV RVC_WORKERS=2
+ENV TRITON_SERVER_ADDR=localhost
+ENV TRITON_SERVER_PORT=8001
+ENV VOICE_SERVER_PORT=50052
+
+# Expose gRPC port
+EXPOSE 50052
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "from rvc.grpc import get_voice_client; c = get_voice_client('localhost', 50052); exit(0 if c and c.is_server_ready() else 1)" || exit 1
+
+# Entry point
+ENTRYPOINT ["python", "-m", "rvc.grpc.voice_server"]
+CMD ["--rvc-model", "${RVC_MODEL}", \
+     "--rvc-workers", "${RVC_WORKERS}", \
+     "--triton-addr", "${TRITON_SERVER_ADDR}", \
+     "--triton-port", "${TRITON_SERVER_PORT}", \
+     "--port", "${VOICE_SERVER_PORT}"]

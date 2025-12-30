@@ -86,9 +86,9 @@ Decoding on a single L20 GPU, using 26 different prompt_audio/target_text [pairs
 
 | Mode | Note   | Concurrency | Avg Latency     | First Chunk Latency (P50) |  RTF | 
 |-------|-----------|-----------------------|---------|----------------|-|
-| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/runtime/triton_trtllm) | 1                   | 876.24 ms |-| 0.1362|
-| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/runtime/triton_trtllm) | 2                   | 920.97 ms |-|0.0737|
-| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/runtime/triton_trtllm) | 4                   | 1611.51 ms |-| 0.0704|
+| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/triton) | 1                   | 876.24 ms |-| 0.1362|
+| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/triton) | 2                   | 920.97 ms |-|0.0737|
+| Offline | [Code Commit](https://github.com/SparkAudio/Spark-TTS/tree/4d769ff782a868524f29e0be851ca64f8b22ebf1/triton) | 4                   | 1611.51 ms |-| 0.0704|
 | Streaming | [Code Commit](https://github.com/yuekaizhang/Spark-TTS/commit/0e978a327f99aa49f0735f86eb09372f16410d86) | 1                   | 913.28 ms |210.42 ms| 0.1501 |
 | Streaming | [Code Commit](https://github.com/yuekaizhang/Spark-TTS/commit/0e978a327f99aa49f0735f86eb09372f16410d86) | 2                   | 1009.23 ms |226.08 ms |0.0862 |
 | Streaming | [Code Commit](https://github.com/yuekaizhang/Spark-TTS/commit/0e978a327f99aa49f0735f86eb09372f16410d86) | 4                   | 1793.86 ms |1017.70 ms| 0.0824 |

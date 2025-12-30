@@ -1,0 +1,74 @@
+# RVC Voice Conversion Server
+#
+# Multi-worker RVC inference server with gRPC interface.
+# Supports configurable number of GPU workers for parallel processing.
+#
+# Build:
+#   docker build -f Dockerfile.rvc -t rvc-server .
+#
+# Run:
+#   docker run --gpus all -p 50051:50051 \
+#     -v /path/to/models:/app/assets/weights \
+#     -e RVC_MODEL=SilverWolf_e300_s6600.pth \
+#     -e RVC_WORKERS=2 \
+#     rvc-server
+#
+# Or with docker-compose (see docker-compose.yml)
+
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install gRPC dependencies
+RUN pip install --no-cache-dir \
+    grpcio>=1.60.0 \
+    grpcio-tools>=1.60.0 \
+    protobuf>=4.25.0
+
+# Copy RVC code
+COPY rvc/ ./rvc/
+
+# Generate gRPC code from proto
+RUN cd rvc/grpc && \
+    python -m grpc_tools.protoc \
+    -I. \
+    --python_out=. \
+    --grpc_python_out=. \
+    rvc_service.proto
+
+# Create directories for models and temp files
+RUN mkdir -p assets/weights assets/hubert assets/rmvpe TEMP
+
+# Environment variables (can be overridden at runtime)
+ENV RVC_MODEL=model.pth
+ENV RVC_WORKERS=2
+ENV RVC_PORT=50051
+ENV RVC_TIMEOUT=120
+ENV RVC_ROOT=/app/rvc
+ENV PYTHONUNBUFFERED=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import grpc; from rvc.grpc import rvc_service_pb2_grpc, rvc_service_pb2; \
+        ch = grpc.insecure_channel('localhost:${RVC_PORT}'); \
+        stub = rvc_service_pb2_grpc.RVCServiceStub(ch); \
+        r = stub.HealthCheck(rvc_service_pb2.HealthRequest(), timeout=5); \
+        exit(0 if r.healthy else 1)"
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Entrypoint
+ENTRYPOINT ["python", "-m", "rvc.grpc.rvc_grpc_server"]
+CMD ["--model", "${RVC_MODEL}", "--workers", "${RVC_WORKERS}", "--port", "${RVC_PORT}", "--timeout", "${RVC_TIMEOUT}"]
