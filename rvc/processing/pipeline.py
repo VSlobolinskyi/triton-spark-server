@@ -97,6 +97,7 @@ class TTSRVCPipeline:
         f0_method: str = "rmvpe",
         tts_output_dir: str = "./TEMP/spark",
         rvc_output_dir: str = "./TEMP/rvc",
+        auto_shutdown: bool = False,
     ):
         """
         Initialize the pipeline.
@@ -110,6 +111,8 @@ class TTSRVCPipeline:
             f0_method: F0 extraction method.
             tts_output_dir: Directory for TTS output files.
             rvc_output_dir: Directory for RVC output files.
+            auto_shutdown: If False, RVC server persists after processing (default).
+                          If True, shutdown is called automatically after context exit.
         """
         self.triton_addr = triton_addr
         self.triton_port = triton_port
@@ -119,6 +122,7 @@ class TTSRVCPipeline:
         self.f0_method = f0_method
         self.tts_output_dir = tts_output_dir
         self.rvc_output_dir = rvc_output_dir
+        self.auto_shutdown = auto_shutdown
 
         self.tts_client: Optional[TritonSparkClient] = None
         self.rvc_server: Optional[RVCServer] = None
@@ -388,5 +392,12 @@ class TTSRVCPipeline:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.shutdown()
+        if self.auto_shutdown:
+            self.shutdown()
+        else:
+            # Only close TTS client, keep RVC server running
+            if self.tts_client:
+                self.tts_client.close()
+                self.tts_client = None
+            logger.info("Pipeline context exited (RVC server still running)")
         return False
