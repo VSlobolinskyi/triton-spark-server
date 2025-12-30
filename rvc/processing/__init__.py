@@ -2,12 +2,14 @@
 Processing Module for Triton Spark TTS + RVC Pipeline
 
 Components:
+- pipeline: Main TTS+RVC pipeline with parallel processing
 - workers: Persistent TTS and RVC worker threads
 - worker_manager: Worker lifecycle management
 - buffer_queue: Ordered audio output buffering
-- utils: Helper functions
+- pipeline_helpers: Helper functions for pipeline setup
 """
 
+from rvc.processing.pipeline import TTSRVCPipeline, PipelineResult, PipelineStats
 from rvc.processing.workers import persistent_tts_worker, persistent_rvc_worker
 from rvc.processing.worker_manager import (
     WorkerManager,
@@ -16,7 +18,7 @@ from rvc.processing.worker_manager import (
     get_current_worker_unload_delay,
 )
 from rvc.processing.buffer_queue import AudioBufferQueue, OrderedAudioBufferQueue
-from rvc.processing.utils import (
+from rvc.processing.pipeline_helpers import (
     initialize_temp_dirs,
     prepare_audio_buffer,
     split_into_sentences,
@@ -29,6 +31,10 @@ from rvc.processing.utils import (
 )
 
 __all__ = [
+    # Pipeline
+    "TTSRVCPipeline",
+    "PipelineResult",
+    "PipelineStats",
     # Workers
     "persistent_tts_worker",
     "persistent_rvc_worker",
@@ -40,7 +46,7 @@ __all__ = [
     # Buffer
     "AudioBufferQueue",
     "OrderedAudioBufferQueue",
-    # Utils
+    # Pipeline Helpers
     "initialize_temp_dirs",
     "prepare_audio_buffer",
     "split_into_sentences",
