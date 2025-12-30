@@ -7,10 +7,13 @@ echo "Start stage: $stage, Stop stage: $stop_stage service_type: $service_type"
 
 huggingface_model_local_dir=/workspace/pretrained_models/Spark-TTS-0.5B
 trt_dtype=bfloat16
-trt_weights_dir=./tllm_checkpoint_${trt_dtype}
-trt_engines_dir=./trt_engines_${trt_dtype}
 
-model_repo=./model_repo_test
+# Use absolute paths to avoid issues when running from different directories
+TRITON_DIR="$(cd "$(dirname "$0")" && pwd)"
+trt_weights_dir=${TRITON_DIR}/tllm_checkpoint_${trt_dtype}
+trt_engines_dir=${TRITON_DIR}/trt_engines_${trt_dtype}
+
+model_repo=${TRITON_DIR}/model_repo_test
 
 if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
     echo "Downloading Spark-TTS-0.5B from HuggingFace"
@@ -20,7 +23,7 @@ fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
     echo "Converting checkpoint to TensorRT weights"
-    python scripts/convert_checkpoint.py --model_dir $huggingface_model_local_dir/LLM \
+    python ${TRITON_DIR}/scripts/convert_checkpoint.py --model_dir $huggingface_model_local_dir/LLM \
                                 --output_dir $trt_weights_dir \
                                 --dtype $trt_dtype || exit 1
 
@@ -38,10 +41,10 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     mkdir -p $model_repo
     spark_tts_dir="spark_tts"
 
-    cp -r ./model_repo/${spark_tts_dir} $model_repo
-    cp -r ./model_repo/audio_tokenizer $model_repo
-    cp -r ./model_repo/tensorrt_llm $model_repo
-    cp -r ./model_repo/vocoder $model_repo
+    cp -r ${TRITON_DIR}/model_repo/${spark_tts_dir} $model_repo
+    cp -r ${TRITON_DIR}/model_repo/audio_tokenizer $model_repo
+    cp -r ${TRITON_DIR}/model_repo/tensorrt_llm $model_repo
+    cp -r ${TRITON_DIR}/model_repo/vocoder $model_repo
 
     ENGINE_PATH=$trt_engines_dir
     MAX_QUEUE_DELAY_MICROSECONDS=0
@@ -54,15 +57,15 @@ if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
     MAX_AUDIO_CHUNK_DURATION=30.0
     AUDIO_CHUNK_SIZE_SCALE_FACTOR=8.0
     AUDIO_CHUNK_OVERLAP_DURATION=0.1
-    python3 scripts/fill_template.py -i ${model_repo}/vocoder/config.pbtxt model_dir:${MODEL_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS}
-    python3 scripts/fill_template.py -i ${model_repo}/audio_tokenizer/config.pbtxt model_dir:${MODEL_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS}
+    python3 ${TRITON_DIR}/scripts/fill_template.py -i ${model_repo}/vocoder/config.pbtxt model_dir:${MODEL_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS}
+    python3 ${TRITON_DIR}/scripts/fill_template.py -i ${model_repo}/audio_tokenizer/config.pbtxt model_dir:${MODEL_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS}
     if [ "$service_type" == "streaming" ]; then
         DECOUPLED_MODE=True
     else
         DECOUPLED_MODE=False
     fi
-    python3 scripts/fill_template.py -i ${model_repo}/${spark_tts_dir}/config.pbtxt bls_instance_num:${BLS_INSTANCE_NUM},llm_tokenizer_dir:${LLM_TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},audio_chunk_duration:${AUDIO_CHUNK_DURATION},max_audio_chunk_duration:${MAX_AUDIO_CHUNK_DURATION},audio_chunk_size_scale_factor:${AUDIO_CHUNK_SIZE_SCALE_FACTOR},audio_chunk_overlap_duration:${AUDIO_CHUNK_OVERLAP_DURATION}
-    python3 scripts/fill_template.py -i ${model_repo}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
+    python3 ${TRITON_DIR}/scripts/fill_template.py -i ${model_repo}/${spark_tts_dir}/config.pbtxt bls_instance_num:${BLS_INSTANCE_NUM},llm_tokenizer_dir:${LLM_TOKENIZER_DIR},triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},audio_chunk_duration:${AUDIO_CHUNK_DURATION},max_audio_chunk_duration:${MAX_AUDIO_CHUNK_DURATION},audio_chunk_size_scale_factor:${AUDIO_CHUNK_SIZE_SCALE_FACTOR},audio_chunk_overlap_duration:${AUDIO_CHUNK_OVERLAP_DURATION}
+    python3 ${TRITON_DIR}/scripts/fill_template.py -i ${model_repo}/tensorrt_llm/config.pbtxt triton_backend:tensorrtllm,triton_max_batch_size:${TRITON_MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},max_beam_width:1,engine_dir:${ENGINE_PATH},max_tokens_in_paged_kv_cache:2560,max_attention_window_size:2560,kv_cache_free_gpu_mem_fraction:0.5,exclude_input_in_output:True,enable_kv_cache_reuse:False,batching_strategy:inflight_fused_batching,max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MICROSECONDS},encoder_input_features_data_type:TYPE_FP16,logits_datatype:TYPE_FP32
 
 fi
 
