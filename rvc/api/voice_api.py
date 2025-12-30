@@ -12,8 +12,8 @@ Usage:
         --port 8000
 
 Endpoints:
-    POST /synthesize           - Text to voice-converted speech
-    POST /synthesize/stream    - Streaming (SSE) per sentence
+    POST /synthesize           - Text to voice-converted speech (single WAV)
+    POST /synthesize/stream    - Streaming per-sentence chunks (for real-time playback)
     POST /tts                  - TTS only (no RVC)
     POST /rvc                  - RVC only (convert audio)
     GET  /health               - Health check
@@ -335,6 +335,7 @@ async def synthesize(
     """
     Synthesize text with voice conversion.
 
+    Automatically splits long text into sentences to avoid TTS length limits.
     Returns WAV audio file.
     """
     global _stats
@@ -348,16 +349,35 @@ async def synthesize(
         ref_audio = ref_audio.astype(np.float32)
 
         total_start = time.time()
+        total_tts_time = 0.0
+        total_rvc_time = 0.0
 
-        # TTS
-        tts_audio, tts_time = run_tts(text, ref_audio, reference_text)
+        # Split text into sentences to avoid TTS length limits
+        sentences = split_into_sentences(text)
+        audio_segments = []
 
-        # RVC
-        if skip_rvc or _rvc_server is None:
-            final_audio = tts_audio
-            rvc_time = 0.0
+        for sentence in sentences:
+            if not sentence.strip():
+                continue
+
+            # TTS for this sentence
+            tts_audio, tts_time = run_tts(sentence, ref_audio, reference_text)
+            total_tts_time += tts_time
+
+            # RVC for this sentence
+            if skip_rvc or _rvc_server is None:
+                segment_audio = tts_audio
+            else:
+                segment_audio, rvc_time = run_rvc(tts_audio, pitch_shift, f0_method, index_rate)
+                total_rvc_time += rvc_time
+
+            audio_segments.append(segment_audio)
+
+        # Concatenate all segments
+        if audio_segments:
+            final_audio = np.concatenate(audio_segments)
         else:
-            final_audio, rvc_time = run_rvc(tts_audio, pitch_shift, f0_method, index_rate)
+            final_audio = np.array([], dtype=np.float32)
 
         total_time = time.time() - total_start
 
@@ -370,10 +390,11 @@ async def synthesize(
             io.BytesIO(wav_bytes),
             media_type="audio/wav",
             headers={
-                "X-TTS-Time": str(tts_time),
-                "X-RVC-Time": str(rvc_time),
+                "X-TTS-Time": str(total_tts_time),
+                "X-RVC-Time": str(total_rvc_time),
                 "X-Total-Time": str(total_time),
                 "X-Audio-Duration": str(len(final_audio) / 16000),
+                "X-Sentences": str(len(sentences)),
             }
         )
 
@@ -396,6 +417,9 @@ async def synthesize_stream(
     """
     Streaming synthesis - yields audio chunks per sentence.
 
+    For real-time playback: start playing audio as each sentence is ready,
+    rather than waiting for the entire text to be processed.
+
     Returns multipart response with WAV chunks.
     """
     global _stats
@@ -413,6 +437,8 @@ async def synthesize_stream(
 
         async def generate():
             for i, sentence in enumerate(sentences):
+                if not sentence.strip():
+                    continue
                 try:
                     # TTS
                     tts_audio, tts_time = run_tts(sentence, ref_audio, reference_text)
