@@ -130,6 +130,9 @@ def rvc_worker_process(
 
     worker_logger.info(f"Starting RVC worker {worker_id}")
 
+    # Will hold the auto-detected index path
+    index_path = ""
+
     try:
         # Import RVC modules (each process gets fresh imports)
         from rvc import init_rvc, load_model, get_vc
@@ -142,6 +145,13 @@ def rvc_worker_process(
         worker_logger.info(f"Loading model: {model_name}")
         model_info = load_model(model_name)
         worker_logger.info(f"Model loaded: version={model_info.get('version')}, sr={model_info.get('tgt_sr')}")
+
+        # Save auto-detected index path for voice quality enhancement
+        index_path = model_info.get("index_path", "")
+        if index_path:
+            worker_logger.info(f"Index file found: {index_path}")
+        else:
+            worker_logger.warning("No index file found - voice similarity features disabled")
 
         # Get VC instance
         vc = get_vc()
@@ -167,14 +177,14 @@ def rvc_worker_process(
                 start_time = time.time()
 
                 try:
-                    # Run RVC inference
+                    # Run RVC inference with auto-detected index file
                     output_info, output_audio = vc.vc_single(
                         sid=0,
                         input_audio_path=job.input_audio_path,
                         f0_up_key=job.pitch_shift,
                         f0_file=None,
                         f0_method=job.f0_method,
-                        file_index="",
+                        file_index=index_path,  # Use auto-detected index for voice quality
                         file_index2="",
                         index_rate=job.index_rate,
                         filter_radius=job.filter_radius,
