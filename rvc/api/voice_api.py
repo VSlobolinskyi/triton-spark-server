@@ -144,8 +144,11 @@ async def lifespan(app: FastAPI):
         logger.info(f"Starting RVC with {rvc_workers} workers...")
         _rvc_server = RVCServer(model_name=rvc_model, num_workers=rvc_workers)
 
-        if _rvc_server.start(timeout=120.0):
+        if _rvc_server.start(timeout=180.0):
             logger.info("RVC server ready")
+            # Warmup workers to preload rmvpe
+            logger.info("Warming up RVC workers...")
+            _rvc_server.warmup(timeout=60.0)
         else:
             logger.warning("RVC server failed to start")
             _rvc_server = None

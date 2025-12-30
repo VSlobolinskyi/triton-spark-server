@@ -326,6 +326,74 @@ class RVCServer:
         logger.info(f"All {self.num_workers} workers ready!")
         return True
 
+    def warmup(self, timeout: float = 60.0) -> bool:
+        """
+        Warmup all workers by running a dummy inference.
+
+        This preloads rmvpe and other lazy-loaded models so first
+        real requests are fast.
+
+        Args:
+            timeout: Max time to wait for warmup per worker.
+
+        Returns:
+            True if all workers warmed up successfully.
+        """
+        if not self.is_running:
+            logger.warning("Server not running, cannot warmup")
+            return False
+
+        logger.info(f"Warming up {self.num_workers} workers...")
+
+        # Create a short dummy audio file (0.5s of silence)
+        import numpy as np
+        dummy_audio = np.zeros(8000, dtype=np.float32)  # 0.5s at 16kHz
+
+        success = True
+        for i in range(self.num_workers):
+            try:
+                # Create temp files for this warmup job
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f_in:
+                    input_path = f_in.name
+                    sf.write(input_path, dummy_audio, 16000)
+
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f_out:
+                    output_path = f_out.name
+
+                logger.info(f"Warmup job {i}...")
+                job_id = self.submit_job(
+                    input_audio_path=input_path,
+                    output_audio_path=output_path,
+                    pitch_shift=0,
+                    f0_method="rmvpe",  # This triggers rmvpe loading
+                    index_rate=0.0,
+                    resample_sr=16000,
+                )
+
+                result = self.get_result(timeout=timeout)
+
+                # Cleanup temp files
+                for f in [input_path, output_path]:
+                    if os.path.exists(f):
+                        try:
+                            os.unlink(f)
+                        except:
+                            pass
+
+                if result and result.success:
+                    logger.info(f"Worker {result.worker_id} warmed up in {result.processing_time:.2f}s")
+                else:
+                    logger.warning(f"Warmup job {i} failed: {result.error if result else 'timeout'}")
+                    success = False
+
+            except Exception as e:
+                logger.error(f"Warmup error: {e}")
+                success = False
+
+        if success:
+            logger.info("All workers warmed up!")
+        return success
+
     def submit_job(
         self,
         input_audio_path: str,
