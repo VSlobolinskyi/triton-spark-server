@@ -156,8 +156,12 @@ class TTSRVCPipeline:
             logger.error("Triton server not ready!")
             return False
 
-        # Initialize RVC server
-        if self.rvc_model:
+        # Initialize RVC server - check if one is already running first
+        existing_server = get_rvc_server()
+        if existing_server is not None and existing_server.is_running:
+            logger.info("Using existing RVC server")
+            self.rvc_server = existing_server
+        elif self.rvc_model:
             logger.info(f"Starting RVC server with {self.num_rvc_workers} workers...")
             try:
                 self.rvc_server = start_rvc_server(
@@ -168,8 +172,9 @@ class TTSRVCPipeline:
             except Exception as e:
                 logger.error(f"Failed to start RVC server: {e}")
                 return False
-
             logger.info("RVC server ready!")
+        else:
+            logger.info("No RVC model specified and no existing server - TTS-only mode")
 
         self._initialized = True
         return True

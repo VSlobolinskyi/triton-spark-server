@@ -4,7 +4,17 @@ Test RVC Server Pipeline
 
 Tests the full TTS + RVC pipeline with parallel processing.
 
-Usage:
+Usage (with existing RVC server - fast):
+    # First start RVC server separately:
+    python tools/rvc_server_control.py start --model "SilverWolf_e300_s6600.pth" --workers 2
+
+    # Then run pipeline (will use existing server):
+    python tools/test_rvc_server.py \
+        --triton-addr localhost \
+        --triton-port 8001 \
+        --prompt-audio "references/reference.wav"
+
+Usage (start new RVC server - slower first run):
     python tools/test_rvc_server.py \
         --triton-addr localhost \
         --triton-port 8001 \
@@ -57,7 +67,7 @@ def main():
     parser.add_argument("--triton-port", type=int, default=8001, help="Triton gRPC port")
 
     # RVC settings
-    parser.add_argument("--rvc-model", required=True, help="RVC model name")
+    parser.add_argument("--rvc-model", default=None, help="RVC model name (optional if server already running)")
     parser.add_argument("--num-rvc-workers", type=int, default=2, help="Number of RVC workers")
     parser.add_argument("--pitch-shift", type=int, default=0, help="Pitch shift in semitones")
     parser.add_argument("--f0-method", default="rmvpe", help="F0 method")
@@ -76,15 +86,23 @@ def main():
         with open(args.text_file, "r", encoding="utf-8") as f:
             text = f.read()
 
-    # Import pipeline
+    # Import pipeline and server utilities
     from rvc.processing.pipeline import TTSRVCPipeline
+    from rvc.server import get_rvc_server
+
+    # Check for existing server
+    existing_server = get_rvc_server()
+    using_existing = existing_server is not None and existing_server.is_running
 
     logger.info("=" * 60)
     logger.info("RVC Server Pipeline Test")
     logger.info("=" * 60)
     logger.info(f"Triton: {args.triton_addr}:{args.triton_port}")
-    logger.info(f"RVC Model: {args.rvc_model}")
-    logger.info(f"RVC Workers: {args.num_rvc_workers}")
+    if using_existing:
+        logger.info(f"RVC Server: Using existing server (already running)")
+    else:
+        logger.info(f"RVC Model: {args.rvc_model or 'None (TTS-only mode)'}")
+        logger.info(f"RVC Workers: {args.num_rvc_workers}")
     logger.info(f"Prompt Audio: {args.prompt_audio}")
 
     # Run pipeline
