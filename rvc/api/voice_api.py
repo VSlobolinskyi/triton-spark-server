@@ -216,8 +216,27 @@ def run_tts(text: str, reference_audio: np.ndarray, reference_text: str) -> tupl
     return audio, time.time() - start
 
 
-def run_rvc(audio: np.ndarray, pitch_shift: int, f0_method: str, index_rate: float) -> tuple:
-    """Run RVC conversion. Returns (audio, time)."""
+def run_rvc(
+    audio: np.ndarray,
+    pitch_shift: int,
+    f0_method: str,
+    index_rate: float,
+    filter_radius: int = 3,
+    rms_mix_rate: float = 0.0,
+    protect: float = 0.33,
+) -> tuple:
+    """
+    Run RVC conversion. Returns (audio, time).
+
+    Args:
+        audio: Input audio array (16kHz, float32)
+        pitch_shift: Pitch shift in semitones
+        f0_method: Pitch extraction method (rmvpe, pm, harvest, crepe)
+        index_rate: Index feature mixing ratio (0.0-1.0)
+        filter_radius: Median filter for pitch smoothing (0-7)
+        rms_mix_rate: Volume envelope mix (0.0=input, 1.0=output)
+        protect: Consonant protection (0.0=max, 0.5=none)
+    """
     if _rvc_server is None:
         return audio, 0.0
 
@@ -238,6 +257,9 @@ def run_rvc(audio: np.ndarray, pitch_shift: int, f0_method: str, index_rate: flo
             pitch_shift=pitch_shift,
             f0_method=f0_method,
             index_rate=index_rate,
+            filter_radius=filter_radius,
+            rms_mix_rate=rms_mix_rate,
+            protect=protect,
             resample_sr=16000,  # Resample to match TTS output
         )
 
@@ -329,6 +351,9 @@ async def synthesize(
     pitch_shift: int = Form(0),
     f0_method: str = Form("rmvpe"),
     index_rate: float = Form(0.75),
+    filter_radius: int = Form(3),
+    rms_mix_rate: float = Form(0.0),  # 0 = use input volume envelope (best for TTS)
+    protect: float = Form(0.33),
     skip_rvc: bool = Form(False),
     reference_audio: UploadFile = File(...),
 ):
@@ -337,6 +362,11 @@ async def synthesize(
 
     Automatically splits long text into sentences to avoid TTS length limits.
     Returns WAV audio file.
+
+    RVC Quality Parameters:
+        filter_radius: Median filter for pitch smoothing (0-7). Higher = smoother.
+        rms_mix_rate: Volume envelope mix (0.0-1.0). 0 = use input, 1 = use output.
+        protect: Consonant protection (0.0-0.5). Lower = more protection.
     """
     global _stats
     _stats["requests"] += 1
@@ -368,7 +398,15 @@ async def synthesize(
             if skip_rvc or _rvc_server is None:
                 segment_audio = tts_audio
             else:
-                segment_audio, rvc_time = run_rvc(tts_audio, pitch_shift, f0_method, index_rate)
+                segment_audio, rvc_time = run_rvc(
+                    tts_audio,
+                    pitch_shift,
+                    f0_method,
+                    index_rate,
+                    filter_radius,
+                    rms_mix_rate,
+                    protect,
+                )
                 total_rvc_time += rvc_time
 
             audio_segments.append(segment_audio)
@@ -411,6 +449,9 @@ async def synthesize_stream(
     pitch_shift: int = Form(0),
     f0_method: str = Form("rmvpe"),
     index_rate: float = Form(0.75),
+    filter_radius: int = Form(3),
+    rms_mix_rate: float = Form(0.0),
+    protect: float = Form(0.33),
     skip_rvc: bool = Form(False),
     reference_audio: UploadFile = File(...),
 ):
@@ -421,6 +462,11 @@ async def synthesize_stream(
     rather than waiting for the entire text to be processed.
 
     Returns multipart response with WAV chunks.
+
+    RVC Quality Parameters:
+        filter_radius: Median filter for pitch smoothing (0-7). Higher = smoother.
+        rms_mix_rate: Volume envelope mix (0.0-1.0). 0 = use input, 1 = use output.
+        protect: Consonant protection (0.0-0.5). Lower = more protection.
     """
     global _stats
     _stats["requests"] += 1
@@ -449,7 +495,13 @@ async def synthesize_stream(
                         rvc_time = 0.0
                     else:
                         final_audio, rvc_time = run_rvc(
-                            tts_audio, pitch_shift, f0_method, index_rate
+                            tts_audio,
+                            pitch_shift,
+                            f0_method,
+                            index_rate,
+                            filter_radius,
+                            rms_mix_rate,
+                            protect,
                         )
 
                     wav_bytes = audio_to_wav_bytes(final_audio, 16000)
@@ -524,9 +576,19 @@ async def rvc_only(
     pitch_shift: int = Form(0),
     f0_method: str = Form("rmvpe"),
     index_rate: float = Form(0.75),
+    filter_radius: int = Form(3),
+    rms_mix_rate: float = Form(0.0),
+    protect: float = Form(0.33),
     audio: UploadFile = File(...),
 ):
-    """RVC only - convert existing audio."""
+    """
+    RVC only - convert existing audio.
+
+    RVC Quality Parameters:
+        filter_radius: Median filter for pitch smoothing (0-7). Higher = smoother.
+        rms_mix_rate: Volume envelope mix (0.0-1.0). 0 = use input, 1 = use output.
+        protect: Consonant protection (0.0-0.5). Lower = more protection.
+    """
     global _stats
     _stats["requests"] += 1
 
@@ -539,7 +601,15 @@ async def rvc_only(
         input_audio, sr = sf.read(audio_buffer)
         input_audio = input_audio.astype(np.float32)
 
-        output_audio, rvc_time = run_rvc(input_audio, pitch_shift, f0_method, index_rate)
+        output_audio, rvc_time = run_rvc(
+            input_audio,
+            pitch_shift,
+            f0_method,
+            index_rate,
+            filter_radius,
+            rms_mix_rate,
+            protect,
+        )
 
         _stats["successful"] += 1
 
