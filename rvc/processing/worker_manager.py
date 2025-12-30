@@ -75,6 +75,11 @@ class WorkerManager:
     def _monitor_workers(self):
         """Background thread that monitors worker usage and unloads idle workers."""
         while not self.shutdown_event.is_set():
+            # Skip unload checks if delay is 0 or negative (persist forever)
+            if self.unload_delay <= 0:
+                time.sleep(1)
+                continue
+
             current_time = time.time()
 
             with self.manager_lock:
@@ -235,6 +240,57 @@ class WorkerManager:
                 self.triton_port = port
             logger.info(f"Updated Triton config: {self.triton_addr}:{self.triton_port}")
 
+    def shutdown_rvc_workers(self):
+        """Shut down all RVC workers (keeps TTS workers running)."""
+        with self.manager_lock:
+            worker_ids = list(self.rvc_workers.keys())
+            if not worker_ids:
+                logger.info("No RVC workers to shut down")
+                return
+
+            logger.info(f"Shutting down {len(worker_ids)} RVC worker(s)")
+            for worker_id in worker_ids:
+                worker_info = self.rvc_workers[worker_id]
+                self._shutdown_rvc_worker(worker_id, worker_info)
+
+            logger.info("All RVC workers shut down")
+
+    def shutdown_tts_workers(self):
+        """Shut down all TTS workers (keeps RVC workers running)."""
+        with self.manager_lock:
+            worker_ids = list(self.tts_workers.keys())
+            if not worker_ids:
+                logger.info("No TTS workers to shut down")
+                return
+
+            logger.info(f"Shutting down {len(worker_ids)} TTS worker(s)")
+            for worker_id in worker_ids:
+                worker_info = self.tts_workers[worker_id]
+                self._shutdown_tts_worker(worker_id, worker_info)
+
+            logger.info("All TTS workers shut down")
+
+    def get_worker_status(self) -> dict:
+        """Get status of all workers."""
+        with self.manager_lock:
+            return {
+                "tts_workers": {
+                    wid: {
+                        "active": self.tts_active[wid].is_set(),
+                        "last_used": info["last_used"],
+                    }
+                    for wid, info in self.tts_workers.items()
+                },
+                "rvc_workers": {
+                    wid: {
+                        "active": self.rvc_active[wid].is_set(),
+                        "last_used": info["last_used"],
+                    }
+                    for wid, info in self.rvc_workers.items()
+                },
+                "unload_delay": self.unload_delay,
+            }
+
     def shutdown(self):
         """Shut down all workers and the manager."""
         logger.info("Shutting down WorkerManager")
@@ -321,3 +377,63 @@ def get_current_worker_unload_delay() -> int:
     """
     manager = get_worker_manager()
     return manager.unload_delay
+
+
+def shutdown_rvc_workers() -> str:
+    """
+    Shut down all RVC workers.
+
+    Returns:
+        str: Status message.
+    """
+    global _worker_manager
+    if _worker_manager is None:
+        return "No worker manager initialized"
+
+    _worker_manager.shutdown_rvc_workers()
+    return "RVC workers shut down"
+
+
+def shutdown_tts_workers() -> str:
+    """
+    Shut down all TTS workers.
+
+    Returns:
+        str: Status message.
+    """
+    global _worker_manager
+    if _worker_manager is None:
+        return "No worker manager initialized"
+
+    _worker_manager.shutdown_tts_workers()
+    return "TTS workers shut down"
+
+
+def shutdown_all_workers() -> str:
+    """
+    Shut down all workers (both TTS and RVC).
+
+    Returns:
+        str: Status message.
+    """
+    global _worker_manager
+    if _worker_manager is None:
+        return "No worker manager initialized"
+
+    _worker_manager.shutdown()
+    _worker_manager = None
+    return "All workers shut down"
+
+
+def get_worker_status() -> dict:
+    """
+    Get status of all workers.
+
+    Returns:
+        dict: Worker status including active state and last used time.
+    """
+    global _worker_manager
+    if _worker_manager is None:
+        return {"error": "No worker manager initialized"}
+
+    return _worker_manager.get_worker_status()

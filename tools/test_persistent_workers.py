@@ -114,7 +114,7 @@ def run_persistent_workers_test(
     # Get worker manager
     logger.info(f"Getting worker manager (Triton: {triton_addr}:{triton_port})")
     manager = get_worker_manager(
-        unload_delay=60,  # Keep workers alive for 60s after idle
+        unload_delay=0,  # 0 = persist forever (like Spark TTS)
         triton_addr=triton_addr,
         triton_port=triton_port,
     )
