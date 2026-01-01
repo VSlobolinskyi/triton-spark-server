@@ -1,0 +1,96 @@
+# Docker Compose for RVC + Triton Pipeline
+#
+# Starts both Triton (for Spark TTS) and RVC (for voice conversion) servers.
+#
+# Usage:
+#   docker-compose -f docker-compose.rvc.yml up -d
+#
+# Check status:
+#   docker-compose -f docker-compose.rvc.yml ps
+#   docker-compose -f docker-compose.rvc.yml logs -f rvc-server
+#
+# Stop:
+#   docker-compose -f docker-compose.rvc.yml down
+
+version: '3.8'
+
+services:
+  # RVC Voice Conversion Server
+  rvc-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.rvc
+    image: rvc-server:latest
+    container_name: rvc-server
+    ports:
+      - "50051:50051"
+    volumes:
+      # Mount model weights
+      - ./assets/weights:/app/assets/weights:ro
+      # Mount HuBERT model
+      - ./assets/hubert:/app/assets/hubert:ro
+      # Mount RMVPE model
+      - ./assets/rmvpe:/app/assets/rmvpe:ro
+      # Shared temp directory for file-based processing
+      - ./TEMP:/app/TEMP
+    environment:
+      - RVC_MODEL=${RVC_MODEL:-SilverWolf_e300_s6600.pth}
+      - RVC_WORKERS=${RVC_WORKERS:-2}
+      - RVC_PORT=50051
+      - RVC_TIMEOUT=120
+      - CUDA_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+        "import grpc; from rvc.grpc import rvc_service_pb2_grpc as s, rvc_service_pb2 as m; \
+         c=grpc.insecure_channel('localhost:50051'); \
+         r=s.RVCServiceStub(c).HealthCheck(m.HealthRequest(),timeout=5); \
+         exit(0 if r.healthy else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Triton Inference Server for Spark TTS
+  # (Optional - include if running full pipeline)
+  triton-server:
+    image: nvcr.io/nvidia/tritonserver:25.02-trtllm-python-py3
+    container_name: triton-spark-tts
+    profiles:
+      - full-pipeline
+    ports:
+      - "8000:8000"  # HTTP
+      - "8001:8001"  # gRPC
+      - "8002:8002"  # Metrics
+    volumes:
+      - ./triton/model_repo:/models:ro
+      - ./TEMP:/workspace/TEMP
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    command: tritonserver --model-repository=/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Networks
+networks:
+  default:
+    name: tts-rvc-network

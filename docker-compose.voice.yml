@@ -1,0 +1,81 @@
+# Unified Voice Service Docker Compose
+#
+# Deploys:
+#   1. Triton Server (Spark TTS) - internal only
+#   2. Voice Service (TTS + RVC combined) - exposed on port 50052
+#
+# Usage:
+#   docker-compose -f docker-compose.voice.yml up -d
+#
+# The voice service connects to Triton internally and exposes a single
+# gRPC endpoint that handles both TTS and RVC in one call.
+
+version: "3.8"
+
+services:
+  # Triton Inference Server for Spark TTS
+  # Internal service - not exposed externally
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    volumes:
+      - ./model_repository:/models
+      - ./spark_model:/app/spark_model:ro
+    command: >
+      tritonserver
+      --model-repository=/models
+      --backend-config=python,shm-default-byte-size=268435456
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - voice-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # Unified Voice Service (TTS + RVC)
+  # This is the main service clients connect to
+  voice:
+    build:
+      context: .
+      dockerfile: Dockerfile.voice
+    volumes:
+      - ./weights:/app/weights:ro
+      - ./TEMP:/app/TEMP
+    environment:
+      - RVC_MODEL=${RVC_MODEL:-SilverWolf_e300_s6600.pth}
+      - RVC_WORKERS=${RVC_WORKERS:-2}
+      - TRITON_SERVER_ADDR=triton
+      - TRITON_SERVER_PORT=8001
+      - VOICE_SERVER_PORT=50052
+    ports:
+      - "50052:50052"
+    depends_on:
+      triton:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - voice-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "from rvc.grpc import get_voice_client; c = get_voice_client('localhost', 50052); exit(0 if c else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+networks:
+  voice-network:
+    driver: bridge

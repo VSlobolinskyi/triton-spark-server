@@ -1,0 +1,156 @@
+// RVC Voice Conversion gRPC Service
+//
+// Provides voice conversion using RVC (Retrieval-based Voice Conversion).
+// Supports multiple parallel workers for high throughput.
+//
+// Generate Python code:
+//   python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. rvc_service.proto
+
+syntax = "proto3";
+
+package rvc;
+
+// RVC Voice Conversion Service
+service RVCService {
+    // Convert audio using RVC model
+    // Sends audio bytes, receives converted audio bytes
+    rpc Convert(ConvertRequest) returns (ConvertResponse);
+
+    // Submit a job for async processing (file paths)
+    rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+
+    // Get result of a submitted job
+    rpc GetResult(GetResultRequest) returns (GetResultResponse);
+
+    // Stream multiple conversions (for pipeline efficiency)
+    rpc ConvertStream(stream ConvertRequest) returns (stream ConvertResponse);
+
+    // Get server status
+    rpc GetStatus(StatusRequest) returns (StatusResponse);
+
+    // Health check
+    rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+// Audio format enum
+enum AudioFormat {
+    WAV = 0;
+    PCM_FLOAT32 = 1;  // Raw PCM float32 samples
+}
+
+// Request to convert audio directly (bytes in, bytes out)
+message ConvertRequest {
+    // Audio data (WAV bytes or raw PCM samples)
+    bytes audio_data = 1;
+
+    // Audio format of input
+    AudioFormat format = 2;
+
+    // Sample rate of input audio (required for PCM)
+    int32 sample_rate = 3;
+
+    // Conversion parameters
+    int32 pitch_shift = 4;          // Semitones (-12 to +12)
+    string f0_method = 5;           // "rmvpe", "harvest", "dio", "pm"
+    float index_rate = 6;           // 0.0 to 1.0 (voice similarity)
+    int32 filter_radius = 7;        // Median filter for pitch (0-7)
+    int32 resample_sr = 8;          // Output sample rate (0 = same as input)
+    float rms_mix_rate = 9;         // Volume envelope mixing (0.0 to 1.0)
+    float protect = 10;             // Protect voiceless consonants (0.0 to 0.5)
+
+    // Optional: request ID for tracking
+    string request_id = 11;
+}
+
+// Response with converted audio
+message ConvertResponse {
+    bool success = 1;
+
+    // Converted audio data
+    bytes audio_data = 2;
+    AudioFormat format = 3;
+    int32 sample_rate = 4;
+
+    // Processing info
+    float processing_time = 5;      // Seconds
+    int32 worker_id = 6;            // Which worker processed this
+
+    // Error info (if success = false)
+    string error = 7;
+
+    // Request ID echo
+    string request_id = 8;
+}
+
+// Request for file-based job submission
+message SubmitJobRequest {
+    string input_path = 1;          // Path to input audio file
+    string output_path = 2;         // Path for output audio file
+
+    // Conversion parameters (same as ConvertRequest)
+    int32 pitch_shift = 3;
+    string f0_method = 4;
+    float index_rate = 5;
+    int32 filter_radius = 6;
+    int32 resample_sr = 7;
+    float rms_mix_rate = 8;
+    float protect = 9;
+}
+
+// Response to job submission
+message SubmitJobResponse {
+    bool success = 1;
+    int64 job_id = 2;
+    string error = 3;
+}
+
+// Request to get job result
+message GetResultRequest {
+    int64 job_id = 1;               // Specific job ID (0 = get any result)
+    float timeout = 2;              // Max wait time in seconds
+}
+
+// Job result response
+message GetResultResponse {
+    bool success = 1;
+    int64 job_id = 2;
+    string output_path = 3;
+    float processing_time = 4;
+    int32 worker_id = 5;
+    string error = 6;
+    bool timed_out = 7;
+}
+
+// Server status request
+message StatusRequest {}
+
+// Server status response
+message StatusResponse {
+    bool running = 1;
+    string model_name = 2;
+    int32 num_workers = 3;
+    int32 workers_alive = 4;
+    int64 jobs_submitted = 5;
+    int64 jobs_completed = 6;
+    float uptime = 7;               // Seconds since start
+
+    // Per-worker info
+    repeated WorkerStatus workers = 8;
+}
+
+message WorkerStatus {
+    int32 worker_id = 1;
+    bool alive = 2;
+    int64 jobs_processed = 3;
+    float avg_processing_time = 4;
+}
+
+// Health check request
+message HealthRequest {}
+
+// Health check response
+message HealthResponse {
+    bool healthy = 1;
+    string status = 2;              // "ready", "loading", "error"
+    string message = 3;
+}
