@@ -25,6 +25,8 @@ import sys
 import io
 import re
 import time
+import json
+import base64
 import logging
 import argparse
 import tempfile
@@ -36,6 +38,7 @@ import soundfile as sf
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
+from sse_starlette.sse import EventSourceResponse
 import uvicorn
 
 # Add project root to path
@@ -106,6 +109,44 @@ class StatusResponse(BaseModel):
     successful_requests: int = 0
     failed_requests: int = 0
     uptime: float = 0.0
+
+
+class VoiceConfigRequest(BaseModel):
+    """Voice configuration update request."""
+    reference_text: Optional[str] = Field(None, description="Transcript of reference audio")
+    pitch_shift: Optional[int] = Field(None, ge=-12, le=12, description="Pitch shift in semitones")
+    f0_method: Optional[str] = Field(None, description="F0 extraction method (rmvpe, pm, harvest, crepe)")
+    index_rate: Optional[float] = Field(None, ge=0, le=1, description="Voice similarity (0-1)")
+    filter_radius: Optional[int] = Field(None, ge=0, le=7, description="Pitch smoothing (0-7)")
+    rms_mix_rate: Optional[float] = Field(None, ge=0, le=1, description="Volume envelope mix (0-1)")
+    protect: Optional[float] = Field(None, ge=0, le=0.5, description="Consonant protection (0-0.5)")
+
+
+class VoiceConfigResponse(BaseModel):
+    """Current voice configuration."""
+    has_reference_audio: bool = False
+    reference_audio_duration: Optional[float] = None
+    reference_text: str = ""
+    pitch_shift: int = 0
+    f0_method: str = "rmvpe"
+    index_rate: float = 0.75
+    filter_radius: int = 3
+    rms_mix_rate: float = 0.0
+    protect: float = 0.33
+
+
+# Global voice configuration state
+_voice_config = {
+    "reference_audio": None,  # numpy array
+    "reference_audio_sr": None,  # sample rate
+    "reference_text": "",
+    "pitch_shift": 0,
+    "f0_method": "rmvpe",
+    "index_rate": 0.75,
+    "filter_radius": 3,
+    "rms_mix_rate": 0.0,
+    "protect": 0.33,
+}
 
 
 # ============================================================================
@@ -347,6 +388,113 @@ async def get_status():
     )
 
 
+# ============================================================================
+# Configuration Endpoints
+# ============================================================================
+
+@app.get("/config", response_model=VoiceConfigResponse)
+async def get_config():
+    """Get current voice configuration."""
+    ref_audio = _voice_config["reference_audio"]
+    ref_sr = _voice_config["reference_audio_sr"]
+
+    return VoiceConfigResponse(
+        has_reference_audio=ref_audio is not None,
+        reference_audio_duration=len(ref_audio) / ref_sr if ref_audio is not None and ref_sr else None,
+        reference_text=_voice_config["reference_text"],
+        pitch_shift=_voice_config["pitch_shift"],
+        f0_method=_voice_config["f0_method"],
+        index_rate=_voice_config["index_rate"],
+        filter_radius=_voice_config["filter_radius"],
+        rms_mix_rate=_voice_config["rms_mix_rate"],
+        protect=_voice_config["protect"],
+    )
+
+
+@app.post("/config", response_model=VoiceConfigResponse)
+async def update_config(config: VoiceConfigRequest):
+    """Update voice configuration parameters."""
+    global _voice_config
+
+    # Update only provided fields
+    if config.reference_text is not None:
+        _voice_config["reference_text"] = config.reference_text
+    if config.pitch_shift is not None:
+        _voice_config["pitch_shift"] = config.pitch_shift
+    if config.f0_method is not None:
+        if config.f0_method not in ["rmvpe", "pm", "harvest", "crepe"]:
+            raise HTTPException(status_code=400, detail=f"Invalid f0_method: {config.f0_method}")
+        _voice_config["f0_method"] = config.f0_method
+    if config.index_rate is not None:
+        _voice_config["index_rate"] = config.index_rate
+    if config.filter_radius is not None:
+        _voice_config["filter_radius"] = config.filter_radius
+    if config.rms_mix_rate is not None:
+        _voice_config["rms_mix_rate"] = config.rms_mix_rate
+    if config.protect is not None:
+        _voice_config["protect"] = config.protect
+
+    logger.info(f"Config updated: pitch={_voice_config['pitch_shift']}, f0={_voice_config['f0_method']}, index={_voice_config['index_rate']}")
+
+    return await get_config()
+
+
+@app.post("/config/reference-audio")
+async def upload_reference_audio(
+    reference_audio: UploadFile = File(...),
+    reference_text: str = Form(""),
+):
+    """
+    Upload reference audio for voice cloning.
+
+    This stores the audio in memory for subsequent synthesis requests.
+    The audio will be used as the voice template for TTS.
+    """
+    global _voice_config
+
+    try:
+        # Read and parse audio
+        ref_bytes = await reference_audio.read()
+        ref_buffer = io.BytesIO(ref_bytes)
+        ref_audio, ref_sr = sf.read(ref_buffer)
+        ref_audio = ref_audio.astype(np.float32)
+
+        # Store in config
+        _voice_config["reference_audio"] = ref_audio
+        _voice_config["reference_audio_sr"] = ref_sr
+        if reference_text:
+            _voice_config["reference_text"] = reference_text
+
+        duration = len(ref_audio) / ref_sr
+        logger.info(f"Reference audio uploaded: {duration:.2f}s @ {ref_sr}Hz")
+
+        return JSONResponse({
+            "success": True,
+            "duration": duration,
+            "sample_rate": ref_sr,
+            "reference_text": _voice_config["reference_text"],
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to upload reference audio: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid audio file: {str(e)}")
+
+
+@app.delete("/config/reference-audio")
+async def delete_reference_audio():
+    """Clear the stored reference audio."""
+    global _voice_config
+
+    had_audio = _voice_config["reference_audio"] is not None
+    _voice_config["reference_audio"] = None
+    _voice_config["reference_audio_sr"] = None
+
+    return JSONResponse({
+        "success": True,
+        "deleted": had_audio,
+    })
+
+
 @app.post("/synthesize")
 async def synthesize(
     text: str = Form(...),
@@ -538,6 +686,138 @@ async def synthesize_stream(
     except Exception as e:
         _stats["failed"] += 1
         logger.error(f"Stream synthesis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/synthesize/sse")
+async def synthesize_sse(
+    text: str = Form(...),
+    reference_text: Optional[str] = Form(None),
+    pitch_shift: Optional[int] = Form(None),
+    f0_method: Optional[str] = Form(None),
+    index_rate: Optional[float] = Form(None),
+    filter_radius: Optional[int] = Form(None),
+    rms_mix_rate: Optional[float] = Form(None),
+    protect: Optional[float] = Form(None),
+    skip_rvc: bool = Form(False),
+    reference_audio: Optional[UploadFile] = File(None),
+):
+    """
+    SSE streaming synthesis - yields audio chunks as JSON events.
+
+    This endpoint is designed for browser clients that expect Server-Sent Events
+    with JSON payloads containing base64-encoded audio data.
+
+    Parameters use stored config values as defaults when not explicitly provided.
+    Reference audio can be sent per-request or use previously uploaded audio via POST /config/reference-audio.
+
+    Events emitted:
+        - start: { total_chunks: int, sample_rate: int, format: "wav" }
+        - chunk: { index: int, data: base64_string, tts_time: float, rvc_time: float, text: string }
+        - end: {}
+        - error: { message: string }
+    """
+    global _stats
+    _stats["requests"] += 1
+
+    # Use stored config as defaults for any None values
+    effective_reference_text = reference_text if reference_text is not None else _voice_config["reference_text"]
+    effective_pitch_shift = pitch_shift if pitch_shift is not None else _voice_config["pitch_shift"]
+    effective_f0_method = f0_method if f0_method is not None else _voice_config["f0_method"]
+    effective_index_rate = index_rate if index_rate is not None else _voice_config["index_rate"]
+    effective_filter_radius = filter_radius if filter_radius is not None else _voice_config["filter_radius"]
+    effective_rms_mix_rate = rms_mix_rate if rms_mix_rate is not None else _voice_config["rms_mix_rate"]
+    effective_protect = protect if protect is not None else _voice_config["protect"]
+
+    try:
+        # Get reference audio - from request or stored config
+        if reference_audio is not None:
+            ref_bytes = await reference_audio.read()
+            ref_buffer = io.BytesIO(ref_bytes)
+            ref_audio, _ = sf.read(ref_buffer)
+            ref_audio = ref_audio.astype(np.float32)
+        elif _voice_config["reference_audio"] is not None:
+            ref_audio = _voice_config["reference_audio"]
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="No reference audio provided. Either send reference_audio in request or upload via POST /config/reference-audio"
+            )
+
+        # Split into sentences
+        sentences = split_into_sentences(text)
+        num_sentences = len([s for s in sentences if s.strip()])
+
+        async def event_generator():
+            # Emit start event
+            start_event = {
+                "type": "start",
+                "total_chunks": num_sentences,
+                "sample_rate": 40000 if not skip_rvc and _rvc_server else 16000,
+                "format": "wav"
+            }
+            yield {"event": "message", "data": json.dumps(start_event)}
+
+            chunk_idx = 0
+            for sentence in sentences:
+                if not sentence.strip():
+                    continue
+
+                try:
+                    # TTS
+                    tts_audio, tts_time = run_tts(sentence, ref_audio, effective_reference_text)
+
+                    # RVC
+                    if skip_rvc or _rvc_server is None:
+                        final_audio = tts_audio
+                        output_sr = 16000
+                        rvc_time = 0.0
+                    else:
+                        final_audio, output_sr, rvc_time = run_rvc(
+                            tts_audio,
+                            effective_pitch_shift,
+                            effective_f0_method,
+                            effective_index_rate,
+                            effective_filter_radius,
+                            effective_rms_mix_rate,
+                            effective_protect,
+                        )
+
+                    # Convert to base64 WAV
+                    wav_bytes = audio_to_wav_bytes(final_audio, output_sr)
+                    audio_b64 = base64.b64encode(wav_bytes).decode('ascii')
+
+                    # Emit chunk event
+                    chunk_event = {
+                        "type": "chunk",
+                        "index": chunk_idx,
+                        "data": audio_b64,
+                        "tts_time": round(tts_time, 3),
+                        "rvc_time": round(rvc_time, 3),
+                        "text": sentence[:100]
+                    }
+                    yield {"event": "message", "data": json.dumps(chunk_event)}
+                    chunk_idx += 1
+
+                except Exception as e:
+                    logger.error(f"Sentence {chunk_idx} error: {e}")
+                    error_event = {
+                        "type": "error",
+                        "message": f"Failed to process sentence {chunk_idx}: {str(e)}"
+                    }
+                    yield {"event": "message", "data": json.dumps(error_event)}
+                    continue
+
+            # Emit end event
+            end_event = {"type": "end"}
+            yield {"event": "message", "data": json.dumps(end_event)}
+            _stats["successful"] += 1
+
+        return EventSourceResponse(event_generator())
+
+    except Exception as e:
+        _stats["failed"] += 1
+        logger.error(f"SSE synthesis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
