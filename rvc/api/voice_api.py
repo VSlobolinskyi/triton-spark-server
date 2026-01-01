@@ -36,6 +36,7 @@ from contextlib import asynccontextmanager
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -225,6 +226,15 @@ app = FastAPI(
     description="TTS + RVC voice synthesis service",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# CORS middleware for cross-origin requests (needed for ngrok/remote access)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
