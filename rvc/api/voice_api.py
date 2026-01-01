@@ -465,9 +465,21 @@ async def upload_reference_audio(
     try:
         # Read and parse audio
         ref_bytes = await reference_audio.read()
+
+        # Debug: Save raw received file
+        debug_path = "/tmp/debug_received_audio.raw"
+        with open(debug_path, "wb") as f:
+            f.write(ref_bytes)
+        logger.info(f"Debug: Saved raw received audio to {debug_path} ({len(ref_bytes)} bytes)")
+
         ref_buffer = io.BytesIO(ref_bytes)
         ref_audio, ref_sr = sf.read(ref_buffer)
         ref_audio = ref_audio.astype(np.float32)
+
+        # Debug: Save parsed audio as WAV
+        debug_wav_path = "/tmp/debug_parsed_audio.wav"
+        sf.write(debug_wav_path, ref_audio, ref_sr)
+        logger.info(f"Debug: Saved parsed audio to {debug_wav_path} ({ref_sr}Hz, {len(ref_audio)/ref_sr:.2f}s)")
 
         # Store in config
         _voice_config["reference_audio"] = ref_audio
