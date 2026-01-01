@@ -35,6 +35,7 @@ from contextlib import asynccontextmanager
 
 import numpy as np
 import soundfile as sf
+import soxr
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -256,6 +257,19 @@ def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int = 16000) -> bytes:
     return buffer.read()
 
 
+def read_and_resample_audio(audio_bytes: bytes, target_sr: int = 16000) -> tuple:
+    """Read audio bytes and resample to target sample rate for TTS."""
+    buffer = io.BytesIO(audio_bytes)
+    audio, sr = sf.read(buffer)
+    audio = audio.astype(np.float32)
+
+    if sr != target_sr:
+        logger.debug(f"Resampling audio from {sr}Hz to {target_sr}Hz")
+        audio = soxr.resample(audio, sr, target_sr)
+
+    return audio, target_sr
+
+
 def run_tts(text: str, reference_audio: np.ndarray, reference_text: str) -> tuple:
     """Run TTS inference. Returns (audio, time)."""
     start = time.time()
@@ -463,23 +477,10 @@ async def upload_reference_audio(
     global _voice_config
 
     try:
-        # Read and parse audio
+        # Read and resample audio to 16kHz
         ref_bytes = await reference_audio.read()
-
-        # Debug: Save raw received file
-        debug_path = "/tmp/debug_received_audio.raw"
-        with open(debug_path, "wb") as f:
-            f.write(ref_bytes)
-        logger.info(f"Debug: Saved raw received audio to {debug_path} ({len(ref_bytes)} bytes)")
-
-        ref_buffer = io.BytesIO(ref_bytes)
-        ref_audio, ref_sr = sf.read(ref_buffer)
-        ref_audio = ref_audio.astype(np.float32)
-
-        # Debug: Save parsed audio as WAV
-        debug_wav_path = "/tmp/debug_parsed_audio.wav"
-        sf.write(debug_wav_path, ref_audio, ref_sr)
-        logger.info(f"Debug: Saved parsed audio to {debug_wav_path} ({ref_sr}Hz, {len(ref_audio)/ref_sr:.2f}s)")
+        ref_audio, ref_sr = read_and_resample_audio(ref_bytes, 16000)
+        logger.info(f"Reference audio received: {len(ref_bytes)} bytes, resampled to {ref_sr}Hz")
 
         # Store in config
         _voice_config["reference_audio"] = ref_audio
@@ -545,11 +546,9 @@ async def synthesize(
     _stats["requests"] += 1
 
     try:
-        # Read reference audio
+        # Read and resample reference audio to 16kHz
         ref_bytes = await reference_audio.read()
-        ref_buffer = io.BytesIO(ref_bytes)
-        ref_audio, ref_sr = sf.read(ref_buffer)
-        ref_audio = ref_audio.astype(np.float32)
+        ref_audio, _ = read_and_resample_audio(ref_bytes, 16000)
 
         total_start = time.time()
         total_tts_time = 0.0
@@ -647,11 +646,9 @@ async def synthesize_stream(
     _stats["requests"] += 1
 
     try:
-        # Read reference audio
+        # Read and resample reference audio to 16kHz
         ref_bytes = await reference_audio.read()
-        ref_buffer = io.BytesIO(ref_bytes)
-        ref_audio, _ = sf.read(ref_buffer)
-        ref_audio = ref_audio.astype(np.float32)
+        ref_audio, _ = read_and_resample_audio(ref_bytes, 16000)
 
         # Split into sentences
         sentences = split_into_sentences(text)
@@ -755,11 +752,9 @@ async def synthesize_sse(
         # Get reference audio - from request or stored config
         if reference_audio is not None:
             ref_bytes = await reference_audio.read()
-            ref_buffer = io.BytesIO(ref_bytes)
-            ref_audio, _ = sf.read(ref_buffer)
-            ref_audio = ref_audio.astype(np.float32)
+            ref_audio, _ = read_and_resample_audio(ref_bytes, 16000)
         elif _voice_config["reference_audio"] is not None:
-            ref_audio = _voice_config["reference_audio"]
+            ref_audio = _voice_config["reference_audio"]  # Already resampled on upload
         else:
             raise HTTPException(
                 status_code=400,
@@ -854,10 +849,9 @@ async def tts_only(
     _stats["requests"] += 1
 
     try:
+        # Read and resample reference audio to 16kHz
         ref_bytes = await reference_audio.read()
-        ref_buffer = io.BytesIO(ref_bytes)
-        ref_audio, _ = sf.read(ref_buffer)
-        ref_audio = ref_audio.astype(np.float32)
+        ref_audio, _ = read_and_resample_audio(ref_bytes, 16000)
 
         tts_audio, tts_time = run_tts(text, ref_audio, reference_text)
 
