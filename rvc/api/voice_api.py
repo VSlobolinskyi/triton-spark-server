@@ -12,8 +12,8 @@ Usage:
         --port 8000
 
 Endpoints:
-    POST /synthesize           - Text to voice-converted speech (single WAV)
-    POST /synthesize/stream    - Streaming per-sentence chunks (for real-time playback)
+    POST /synthesize/sse       - SSE streaming synthesis (for web clients)
+    POST /synthesize/stream    - Streaming per-sentence chunks (multipart)
     POST /tts                  - TTS only (no RVC)
     POST /rvc                  - RVC only (convert audio)
     GET  /health               - Health check
@@ -516,104 +516,6 @@ async def delete_reference_audio():
         "success": True,
         "deleted": had_audio,
     })
-
-
-@app.post("/synthesize")
-async def synthesize(
-    text: str = Form(...),
-    reference_text: str = Form(""),
-    pitch_shift: int = Form(0),
-    f0_method: str = Form("rmvpe"),
-    index_rate: float = Form(0.75),
-    filter_radius: int = Form(3),
-    rms_mix_rate: float = Form(0.0),  # 0 = use input volume envelope (best for TTS)
-    protect: float = Form(0.33),
-    skip_rvc: bool = Form(False),
-    reference_audio: UploadFile = File(...),
-):
-    """
-    Synthesize text with voice conversion.
-
-    Automatically splits long text into sentences to avoid TTS length limits.
-    Returns WAV audio file.
-
-    RVC Quality Parameters:
-        filter_radius: Median filter for pitch smoothing (0-7). Higher = smoother.
-        rms_mix_rate: Volume envelope mix (0.0-1.0). 0 = use input, 1 = use output.
-        protect: Consonant protection (0.0-0.5). Lower = more protection.
-    """
-    global _stats
-    _stats["requests"] += 1
-
-    try:
-        # Read and resample reference audio to 16kHz
-        ref_bytes = await reference_audio.read()
-        ref_audio, _ = read_and_resample_audio(ref_bytes, 16000)
-
-        total_start = time.time()
-        total_tts_time = 0.0
-        total_rvc_time = 0.0
-
-        # Split text into sentences to avoid TTS length limits
-        sentences = split_into_sentences(text)
-        audio_segments = []
-
-        for sentence in sentences:
-            if not sentence.strip():
-                continue
-
-            # TTS for this sentence
-            tts_audio, tts_time = run_tts(sentence, ref_audio, reference_text)
-            total_tts_time += tts_time
-
-            # RVC for this sentence
-            if skip_rvc or _rvc_server is None:
-                segment_audio = tts_audio
-                output_sr = 16000  # TTS native rate
-            else:
-                segment_audio, output_sr, rvc_time = run_rvc(
-                    tts_audio,
-                    pitch_shift,
-                    f0_method,
-                    index_rate,
-                    filter_radius,
-                    rms_mix_rate,
-                    protect,
-                )
-                total_rvc_time += rvc_time
-
-            audio_segments.append(segment_audio)
-
-        # Concatenate all segments
-        if audio_segments:
-            final_audio = np.concatenate(audio_segments)
-        else:
-            final_audio = np.array([], dtype=np.float32)
-
-        total_time = time.time() - total_start
-
-        _stats["successful"] += 1
-
-        # Return audio as WAV (use RVC output sample rate, typically 40kHz)
-        wav_bytes = audio_to_wav_bytes(final_audio, output_sr)
-
-        return StreamingResponse(
-            io.BytesIO(wav_bytes),
-            media_type="audio/wav",
-            headers={
-                "X-TTS-Time": str(total_tts_time),
-                "X-RVC-Time": str(total_rvc_time),
-                "X-Total-Time": str(total_time),
-                "X-Audio-Duration": str(len(final_audio) / output_sr),
-                "X-Sentences": str(len(sentences)),
-                "X-Sample-Rate": str(output_sr),
-            }
-        )
-
-    except Exception as e:
-        _stats["failed"] += 1
-        logger.error(f"Synthesis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/synthesize/stream")
