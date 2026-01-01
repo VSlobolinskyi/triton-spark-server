@@ -18,6 +18,311 @@
 ├── docker-compose.voice.yml
 ├── Dockerfile.rvc
 ├── Dockerfile.voice
+├── index-tts
+│   ├── .gitattributes
+│   ├── .github
+│   │   └── workflows
+│   │       └── docker-publish.yml
+│   ├── .gitignore
+│   ├── .python-version
+│   ├── archive
+│   │   └── README_INDEXTTS_1_5.md
+│   ├── assets
+│   │   ├── .DS_Store
+│   │   ├── img.png
+│   │   ├── IndexTTS.png
+│   │   ├── IndexTTS2-video-pic.png
+│   │   ├── IndexTTS2.mp4
+│   │   ├── IndexTTS2.png
+│   │   ├── IndexTTS2_banner.png
+│   │   └── index_icon.png
+│   ├── checkpoints
+│   │   ├── config.yaml
+│   │   └── pinyin.vocab
+│   ├── DISCLAIMER
+│   ├── docs
+│   │   └── README_zh.md
+│   ├── examples
+│   │   └── cases.jsonl
+│   ├── indextts
+│   │   ├── accel
+│   │   │   ├── accel_engine.py
+│   │   │   ├── attention.py
+│   │   │   ├── gpt2_accel.py
+│   │   │   ├── kv_manager.py
+│   │   │   └── __init__.py
+│   │   ├── BigVGAN
+│   │   │   ├── activations.py
+│   │   │   ├── alias_free_activation
+│   │   │   │   ├── cuda
+│   │   │   │   │   ├── .gitignore
+│   │   │   │   │   ├── activation1d.py
+│   │   │   │   │   ├── anti_alias_activation.cpp
+│   │   │   │   │   ├── anti_alias_activation_cuda.cu
+│   │   │   │   │   ├── compat.h
+│   │   │   │   │   ├── load.py
+│   │   │   │   │   ├── type_shim.h
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── torch
+│   │   │   │   │   ├── act.py
+│   │   │   │   │   ├── filter.py
+│   │   │   │   │   ├── resample.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── alias_free_torch
+│   │   │   │   ├── act.py
+│   │   │   │   ├── filter.py
+│   │   │   │   ├── resample.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── bigvgan.py
+│   │   │   ├── ECAPA_TDNN.py
+│   │   │   ├── models.py
+│   │   │   ├── nnet
+│   │   │   │   ├── CNN.py
+│   │   │   │   ├── linear.py
+│   │   │   │   ├── normalization.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── utils.py
+│   │   │   └── __init__.py
+│   │   ├── cli.py
+│   │   ├── gpt
+│   │   │   ├── conformer
+│   │   │   │   ├── attention.py
+│   │   │   │   ├── embedding.py
+│   │   │   │   ├── subsampling.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── conformer_encoder.py
+│   │   │   ├── model.py
+│   │   │   ├── model_v2.py
+│   │   │   ├── perceiver.py
+│   │   │   ├── transformers_beam_search.py
+│   │   │   ├── transformers_generation_utils.py
+│   │   │   ├── transformers_gpt2.py
+│   │   │   ├── transformers_modeling_utils.py
+│   │   │   └── __init__.py
+│   │   ├── infer.py
+│   │   ├── infer_v2.py
+│   │   ├── s2mel
+│   │   │   ├── dac
+│   │   │   │   ├── model
+│   │   │   │   │   ├── base.py
+│   │   │   │   │   ├── dac.py
+│   │   │   │   │   ├── discriminator.py
+│   │   │   │   │   ├── encodec.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── nn
+│   │   │   │   │   ├── layers.py
+│   │   │   │   │   ├── loss.py
+│   │   │   │   │   ├── quantize.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── utils
+│   │   │   │   │   ├── decode.py
+│   │   │   │   │   ├── encode.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── __main__.py
+│   │   │   ├── hf_utils.py
+│   │   │   ├── modules
+│   │   │   │   ├── .ipynb_checkpoints
+│   │   │   │   │   ├── audio-checkpoint.py
+│   │   │   │   │   ├── commons-checkpoint.py
+│   │   │   │   │   ├── diffusion_transformer-checkpoint.py
+│   │   │   │   │   ├── flow_matching-checkpoint.py
+│   │   │   │   │   └── length_regulator-checkpoint.py
+│   │   │   │   ├── alias_free_torch
+│   │   │   │   │   ├── act.py
+│   │   │   │   │   ├── filter.py
+│   │   │   │   │   ├── resample.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── audio.py
+│   │   │   │   ├── bigvgan
+│   │   │   │   │   ├── activations.py
+│   │   │   │   │   ├── alias_free_activation
+│   │   │   │   │   │   ├── cuda
+│   │   │   │   │   │   │   ├── activation1d.py
+│   │   │   │   │   │   │   ├── anti_alias_activation.cpp
+│   │   │   │   │   │   │   ├── anti_alias_activation_cuda.cu
+│   │   │   │   │   │   │   ├── compat.h
+│   │   │   │   │   │   │   ├── load.py
+│   │   │   │   │   │   │   ├── type_shim.h
+│   │   │   │   │   │   │   └── __init__.py
+│   │   │   │   │   │   └── torch
+│   │   │   │   │   │       ├── act.py
+│   │   │   │   │   │       ├── filter.py
+│   │   │   │   │   │       ├── resample.py
+│   │   │   │   │   │       └── __init__.py
+│   │   │   │   │   ├── bigvgan.py
+│   │   │   │   │   ├── config.json
+│   │   │   │   │   ├── env.py
+│   │   │   │   │   ├── meldataset.py
+│   │   │   │   │   └── utils.py
+│   │   │   │   ├── campplus
+│   │   │   │   │   ├── classifier.py
+│   │   │   │   │   ├── DTDNN.py
+│   │   │   │   │   └── layers.py
+│   │   │   │   ├── commons.py
+│   │   │   │   ├── diffusion_transformer.py
+│   │   │   │   ├── encodec.py
+│   │   │   │   ├── flow_matching.py
+│   │   │   │   ├── gpt_fast
+│   │   │   │   │   ├── .ipynb_checkpoints
+│   │   │   │   │   │   └── model-checkpoint.py
+│   │   │   │   │   ├── generate.py
+│   │   │   │   │   ├── model.py
+│   │   │   │   │   └── quantize.py
+│   │   │   │   ├── hifigan
+│   │   │   │   │   ├── f0_predictor.py
+│   │   │   │   │   └── generator.py
+│   │   │   │   ├── layers.py
+│   │   │   │   ├── length_regulator.py
+│   │   │   │   ├── openvoice
+│   │   │   │   │   ├── api.py
+│   │   │   │   │   ├── attentions.py
+│   │   │   │   │   ├── checkpoints_v2
+│   │   │   │   │   │   └── converter
+│   │   │   │   │   │       └── config.json
+│   │   │   │   │   ├── commons.py
+│   │   │   │   │   ├── mel_processing.py
+│   │   │   │   │   ├── models.py
+│   │   │   │   │   ├── modules.py
+│   │   │   │   │   ├── openvoice_app.py
+│   │   │   │   │   ├── se_extractor.py
+│   │   │   │   │   ├── transforms.py
+│   │   │   │   │   ├── utils.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   ├── quantize.py
+│   │   │   │   ├── rmvpe.py
+│   │   │   │   ├── vocos
+│   │   │   │   │   ├── heads.py
+│   │   │   │   │   ├── helpers.py
+│   │   │   │   │   ├── loss.py
+│   │   │   │   │   ├── models.py
+│   │   │   │   │   ├── modules.py
+│   │   │   │   │   ├── pretrained.py
+│   │   │   │   │   ├── spectral_ops.py
+│   │   │   │   │   └── __init__.py
+│   │   │   │   └── wavenet.py
+│   │   │   ├── optimizers.py
+│   │   │   └── wav2vecbert_extract.py
+│   │   ├── utils
+│   │   │   ├── arch_util.py
+│   │   │   ├── checkpoint.py
+│   │   │   ├── common.py
+│   │   │   ├── feature_extractors.py
+│   │   │   ├── front.py
+│   │   │   ├── maskgct
+│   │   │   │   └── models
+│   │   │   │       ├── codec
+│   │   │   │       │   ├── amphion_codec
+│   │   │   │       │   │   ├── codec.py
+│   │   │   │       │   │   ├── quantize
+│   │   │   │       │   │   │   ├── factorized_vector_quantize.py
+│   │   │   │       │   │   │   ├── lookup_free_quantize.py
+│   │   │   │       │   │   │   ├── residual_vq.py
+│   │   │   │       │   │   │   ├── vector_quantize.py
+│   │   │   │       │   │   │   └── __init__.py
+│   │   │   │       │   │   └── vocos.py
+│   │   │   │       │   ├── codec_dataset.py
+│   │   │   │       │   ├── codec_inference.py
+│   │   │   │       │   ├── codec_sampler.py
+│   │   │   │       │   ├── codec_trainer.py
+│   │   │   │       │   ├── facodec
+│   │   │   │       │   │   ├── alias_free_torch
+│   │   │   │       │   │   │   ├── act.py
+│   │   │   │       │   │   │   ├── filter.py
+│   │   │   │       │   │   │   ├── resample.py
+│   │   │   │       │   │   │   └── __init__.py
+│   │   │   │       │   │   ├── facodec_dataset.py
+│   │   │   │       │   │   ├── facodec_inference.py
+│   │   │   │       │   │   ├── facodec_trainer.py
+│   │   │   │       │   │   ├── modules
+│   │   │   │       │   │   │   ├── attentions.py
+│   │   │   │       │   │   │   ├── commons.py
+│   │   │   │       │   │   │   ├── gradient_reversal.py
+│   │   │   │       │   │   │   ├── JDC
+│   │   │   │       │   │   │   │   ├── bst.t7
+│   │   │   │       │   │   │   │   ├── model.py
+│   │   │   │       │   │   │   │   └── __init__.py
+│   │   │   │       │   │   │   ├── layers.py
+│   │   │   │       │   │   │   ├── quantize.py
+│   │   │   │       │   │   │   ├── style_encoder.py
+│   │   │   │       │   │   │   └── wavenet.py
+│   │   │   │       │   │   ├── optimizer.py
+│   │   │   │       │   │   └── __init__.py
+│   │   │   │       │   ├── kmeans
+│   │   │   │       │   │   ├── repcodec_model.py
+│   │   │   │       │   │   └── vocos.py
+│   │   │   │       │   ├── melvqgan
+│   │   │   │       │   │   └── melspec.py
+│   │   │   │       │   ├── ns3_codec
+│   │   │   │       │   │   ├── alias_free_torch
+│   │   │   │       │   │   │   ├── act.py
+│   │   │   │       │   │   │   ├── filter.py
+│   │   │   │       │   │   │   ├── resample.py
+│   │   │   │       │   │   │   └── __init__.py
+│   │   │   │       │   │   ├── facodec.py
+│   │   │   │       │   │   ├── gradient_reversal.py
+│   │   │   │       │   │   ├── melspec.py
+│   │   │   │       │   │   ├── quantize
+│   │   │   │       │   │   │   ├── fvq.py
+│   │   │   │       │   │   │   ├── rvq.py
+│   │   │   │       │   │   │   └── __init__.py
+│   │   │   │       │   │   ├── README.md
+│   │   │   │       │   │   ├── transformer.py
+│   │   │   │       │   │   └── __init__.py
+│   │   │   │       │   ├── speechtokenizer
+│   │   │   │       │   │   ├── model.py
+│   │   │   │       │   │   └── modules
+│   │   │   │       │   │       ├── conv.py
+│   │   │   │       │   │       ├── lstm.py
+│   │   │   │       │   │       ├── norm.py
+│   │   │   │       │   │       ├── quantization
+│   │   │   │       │   │       │   ├── ac.py
+│   │   │   │       │   │       │   ├── core_vq.py
+│   │   │   │       │   │       │   ├── distrib.py
+│   │   │   │       │   │       │   ├── vq.py
+│   │   │   │       │   │       │   └── __init__.py
+│   │   │   │       │   │       ├── seanet.py
+│   │   │   │       │   │       └── __init__.py
+│   │   │   │       │   ├── vevo
+│   │   │   │       │   │   └── vevo_repcodec.py
+│   │   │   │       │   └── __init__.py
+│   │   │   │       └── tts
+│   │   │   │           └── maskgct
+│   │   │   │               ├── ckpt
+│   │   │   │               │   └── wav2vec2bert_stats.pt
+│   │   │   │               ├── llama_nar.py
+│   │   │   │               └── maskgct_s2a.py
+│   │   │   ├── maskgct_utils.py
+│   │   │   ├── text_utils.py
+│   │   │   ├── typical_sampling.py
+│   │   │   ├── utils.py
+│   │   │   ├── webui_utils.py
+│   │   │   ├── xtransformers.py
+│   │   │   └── __init__.py
+│   │   ├── vqvae
+│   │   │   ├── xtts_dvae.py
+│   │   │   └── __init__.py
+│   │   └── __init__.py
+│   ├── LICENSE
+│   ├── LICENSE_ZH.txt
+│   ├── MANIFEST.in
+│   ├── pyproject.toml
+│   ├── README.md
+│   ├── tests
+│   │   ├── cases.jsonl
+│   │   ├── padding_test.py
+│   │   └── regression_test.py
+│   ├── tools
+│   │   ├── gpu_check.py
+│   │   └── i18n
+│   │       ├── i18n.py
+│   │       ├── locale
+│   │       │   ├── en_US.json
+│   │       │   └── zh_CN.json
+│   │       └── scan_i18n.py
+│   ├── uv.lock
+│   └── webui.py
 ├── LICENSE
 ├── logs
 │   └── mute
